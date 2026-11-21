@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -50,7 +51,9 @@ class DocsInputTests(unittest.TestCase):
     def test_generated_outputs_are_not_inputs_but_registry_is(self):
         for path in ('openapi/aisa-social.json', 'api-reference/x/y.mdx', 'zh/api-reference/a.mdx',
                      'docs.json', 'llms.txt', 'openapi.yaml', 'docs/publication/current.json',
-                     'discovery/openapi.json', 'discovery/payment-evidence.json'):
+                     'discovery/openapi.json', 'discovery/payment-evidence.json',
+                     'tasks/openapi.json', 'tasks/example-task.mdx', 'zh/tasks/example-task.mdx',
+                     'docs/task-runtime.json'):
             self.assertFalse(plan.is_input(path), path)
         for path in ('openapi/registry.yaml', 'scripts/canonical_import.py', 'translations/openapi-zh.json',
                      'docs/human-api-retirements.json', 'README.md'):
@@ -154,7 +157,7 @@ class WorkflowTests(unittest.TestCase):
         steps = {step.get('id'): step for step in self.jobs['plan']['steps']}
         self.assertIn('live_contract_plan.py', steps['live']['run'])
         self.assertTrue(steps['done']['with']['lookup-only'])
-        self.assertEqual(steps['done']['with']['key'], 'pull-openapi-done-${{ steps.live.outputs.input_key }}')
+        self.assertEqual(steps['done']['with']['key'], 'pull-openapi-done-${{ steps.live.outputs.input_key }}-${{ steps.live.outputs.publication_release }}')
 
     def test_only_a_completed_publishing_run_is_remembered(self):
         compose_steps = self.jobs['compose']['steps']
@@ -171,10 +174,74 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(record['needs'], ['plan', 'compose'])
         save = next(step for step in record['steps'] if step.get('uses', '').startswith('actions/cache/save'))
         self.assertEqual(save['if'], "needs.compose.outputs.completed == 'true'")
-        self.assertEqual(save['with']['key'], 'pull-openapi-done-${{ needs.plan.outputs.input_key }}')
+        self.assertEqual(save['with']['key'], 'pull-openapi-done-${{ needs.compose.outputs.input_key }}-${{ needs.compose.outputs.publication_release }}')
         warn = record['steps'][0]
         self.assertEqual(warn['if'], "needs.compose.outputs.completed != 'true'")
         self.assertIn('::warning::', warn['run'])
+
+    def test_publication_cache_tracks_reenable_price_changes_and_actual_acquisition(self):
+        steps = {s.get('id'): s for s in self.jobs['plan']['steps']}
+        completed = next(s for s in self.jobs['compose']['steps'] if s.get('id') == 'completed')
+        save = next(s for s in self.jobs['record']['steps'] if s.get('uses', '').startswith('actions/cache/save'))
+        cache = set()
+        def key(template, values):
+            for name, value in values.items():
+                template = template.replace('${{ ' + name + ' }}', value)
+            self.assertNotIn('${{', template)
+            return template
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'scripts').symlink_to(ROOT / 'scripts', target_is_directory=True)
+            (root / 'generator.txt').write_text('reviewed generator')
+            subprocess.run(['git', 'init', '-q'], cwd=root, check=True, capture_output=True)
+            subprocess.run(['git', 'add', 'generator.txt'], cwd=root, check=True, capture_output=True)
+            subprocess.run(['git', '-c', 'user.name=test', '-c', 'user.email=test@example.invalid',
+                            'commit', '-qm', 'generator'], cwd=root, check=True, capture_output=True)
+            pointer = root / 'docs/publication/current.json'
+            pointer.parent.mkdir(parents=True)
+            env = {**os.environ, 'PATH': str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH'],
+                   'GITHUB_STEP_SUMMARY': str(root / 'summary')}
+            # A and its re-enable have identical bytes, including the Task hash.
+            # Only the manifest Task member changes for B (disabled) and C (price).
+            for digest, publish, changed in (('a', 'a', True), ('a', None, False),
+                                              ('b', 'b', True), ('b', None, False),
+                                              ('a', 'a', True), ('a', None, False),
+                                              ('c', 'c', True), ('c', None, False),
+                                              ('d', 'e', True), ('e', None, False),
+                                              ('d', 'd', True), ('d', None, False)):
+                current = index(('index.json', '1' * 64), ('tasks/catalog.json', digest * 64))
+                responses = {plan.CURRENT: current, plan.CATEGORY: {'apis': []}}
+                out = root / 'plan-output'
+                out.unlink(missing_ok=True)
+                with patch.object(plan, 'fetch', side_effect=lambda base, path: responses[path]):
+                    self.assertEqual(plan.main(['--root', str(root), '--github-output', str(out)]), 0)
+                values = dict(line.split('=', 1) for line in out.read_text().splitlines())
+                lookup = key(steps['done']['with']['key'], {'steps.live.outputs.' + k: v for k, v in values.items()})
+                decision = root / 'decision'
+                decision.unlink(missing_ok=True)
+                subprocess.run(['bash', '-e', '-c', steps['decide']['run']], check=True, cwd=root,
+                               env={**env, 'AVAILABLE': 'true', 'DONE': str(lookup in cache).lower(),
+                                    'GENERATION': str(current['generation']), 'GITHUB_OUTPUT': str(decision)})
+                self.assertEqual(decision.read_text().strip(), 'changed=' + str(changed).lower())
+                if publish:
+                    pointer.write_text(json.dumps({'status': 'passed', 'contract_release': publish * 64}))
+                    actual = index(('index.json', '1' * 64), ('tasks/catalog.json', publish * 64))
+                    receipt = {'manifest_files': actual['files'],
+                               'category_content_sha256': plan.category_hash(responses[plan.CATEGORY])}
+                    (pointer.parent / 'runtime-acquisition.json').write_text(json.dumps(receipt))
+                    done = root / 'completed'
+                    done.unlink(missing_ok=True)
+                    subprocess.run(['bash', '-e', '-c', completed['run']], check=True, cwd=root,
+                                   env={**env, 'GITHUB_OUTPUT': str(done)})
+                    outputs = dict(line.split('=', 1) for line in done.read_text().splitlines())
+                    self.assertEqual(outputs['completed'], 'true')
+                    self.assertEqual(outputs['publication_release'], publish * 64)
+                    self.assertEqual(outputs['input_key'], plan.plan(actual, responses[plan.CATEGORY],
+                                                                    plan.docs_inputs(root))['input_key'])
+                    if digest != publish:
+                        self.assertNotEqual(outputs['input_key'], values['input_key'])
+                    cache.add(key(save['with']['key'], {'needs.compose.outputs.input_key': outputs['input_key'],
+                              'needs.compose.outputs.publication_release': outputs['publication_release']}))
 
     def test_acquisition_retries_with_a_fresh_output(self):
         step = next(s for s in self.jobs['compose']['steps']

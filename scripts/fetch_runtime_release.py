@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
-from runtime_contract_artifact import member_name, file_limit, validate_canonical_files
+from runtime_contract_artifact import member_name, file_limit, validate_canonical_files, TASK_CATALOG
 
 MAX_FILE = 8 << 20
 MAX_TOTAL = 192 << 20
@@ -165,7 +165,9 @@ def validate_release_files(contents):
 
 
 def facts_members(contents):
-    return {name: raw for name, raw in contents.items() if not name.startswith('contracts/')}
+    # Tasks are verified outer-release members, not Raw provider inventory.
+    return {name: raw for name, raw in contents.items()
+            if not name.startswith('contracts/') and name != TASK_CATALOG}
 
 
 def validate_artifact_files(contents, current, *, canonical_result=None):

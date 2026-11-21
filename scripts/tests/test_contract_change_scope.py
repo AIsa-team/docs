@@ -135,7 +135,7 @@ class ChangeScopeTests(unittest.TestCase):
         workflow = yaml.safe_load((Path(__file__).resolve().parents[2] /
                                    '.github/workflows/test-runtime-contracts.yml').read_text())
         triggers = workflow.get('on', workflow.get(True))
-        for page in ('api-reference.mdx', 'zh/api-reference.mdx'):
+        for page in ('api-reference.mdx', 'zh/api-reference.mdx', 'docs/task-runtime.json'):
             self.assertTrue(requires_artifact_check([page]))
             for event in ('push', 'pull_request'):
                 self.assertIn(page, triggers[event]['paths'])

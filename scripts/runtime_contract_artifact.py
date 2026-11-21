@@ -9,6 +9,7 @@ PROTOCOL = 'aisa-runtime-canonical-v1'
 MANIFEST = 'contracts/manifest.json'
 AGGREGATE = 'contracts/openapi.json'
 READINESS = 'contracts/readiness.json'
+TASK_CATALOG = 'tasks/catalog.json'
 MAX_METADATA = 1 << 20
 # The production aggregate reached 66.9 MB on 2026-11-16, 242 KB under the
 # former 64 MiB ceiling, and complete observed response structures add about
@@ -33,7 +34,7 @@ def require(condition, reason):
 
 def member_name(name):
     return (isinstance(name, str) and len(name) <= 255 and
-            (FACT.fullmatch(name) or NATIVE.fullmatch(name) or name in {MANIFEST, AGGREGATE, READINESS}))
+            (FACT.fullmatch(name) or NATIVE.fullmatch(name) or name in {MANIFEST, AGGREGATE, READINESS, TASK_CATALOG}))
 
 
 def file_limit(name, facts_limit=8 << 20):

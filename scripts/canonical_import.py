@@ -227,7 +227,7 @@ def retired_page_references(root):
 
 
 def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
-    """Return byte outputs; native/full JSON stay the exact verified producer bytes."""
+    """Return bytes (or None for removed generated pages) from a verified graph."""
     from pull_openapi import (existing_page_references, generate_pages,
         refresh_legacy_page_blocks, refresh_localized_documents)
     from runtime_consolidate_openapi import publication_yaml, update_discovery_index
@@ -235,6 +235,16 @@ def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
     root = Path(input_view)
     native = {name: strict_json(raw) for name, raw in native_raw.items()}
     original = published_documents(root)
+    previous_registry = yaml.load(regular_read(root, 'openapi/registry.yaml'), Loader=UniqueLoader)
+    # Input assessment authenticates the prior registry and the full new graph.
+    # Fixed registrations remain in metadata; only withdrawn Runtime additions
+    # can disappear from both that registry and the canonical native membership.
+    withdrawn = ((set(original) - set(native)) &
+                 (set(previous_registry['providers']) - set(metadata['registry']['providers'])))
+    withdrawn = {name for name in withdrawn if previous_registry.get('auto_register')
+                 and original[name].get('info', {}).get('x-aisa-provider') == name
+                 and set(original[name]['info'].get('x-aisa-catalogs', {})) == {name}
+                 and original[name]['info'].get('x-aisa-document', {}).get('facts_hash')}
     changes = {}
     references = existing_page_references(root) + retired_page_references(root)
     identities = {}  # Page headers are read once for every provider in this projection.
@@ -252,9 +262,28 @@ def project_surfaces(input_view, native_raw, aggregate_raw, metadata):
     # Editorially retired routes keep their archived pages, exactly as in stage().
     from human_api_retirements import apply_retirements
     apply_retirements(root, changes)
+    from publication_surface import disappeared_generated_pages
+    from pull_openapi import remove_disabled_navigation
+    removed = disappeared_generated_pages(root, original, native, withdrawn)
+    removed -= {path.relative_to(root).as_posix() for path in changes}
+    if removed:
+        docs_path = root / 'docs.json'
+        docs = json.loads(changes.get(docs_path, docs_path.read_text()))
+        for language in docs['navigation']['languages']:
+            for tab in language.get('tabs', []):
+                for key in ('groups', 'pages'):
+                    if isinstance(tab.get(key), list):
+                        tab[key] = remove_disabled_navigation(tab[key], {name[:-4] for name in removed})
+        changes[docs_path] = json.dumps(docs, indent=2, ensure_ascii=False) + '\n'
     require(all(canonical(native[name]) == canonical(strict_json(raw)) for name, raw in native_raw.items()),
             'Projection changed canonical native declarations')
     byte_changes = {path.relative_to(root).as_posix(): text.encode() for path, text in changes.items()}
+    byte_changes.update({name: None for name in removed})
+    for provider in withdrawn:
+        for prefix in ('', 'zh/'):
+            name = 'openapi/' + prefix + provider + '.json'
+            if (root / name).is_file():
+                byte_changes[name] = None
     byte_changes.update({'openapi/' + name + '.json': raw for name, raw in native_raw.items()})
     byte_changes['openapi/openapi.json'] = aggregate_raw
     aggregate = strict_json(aggregate_raw)

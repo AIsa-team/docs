@@ -162,6 +162,8 @@ def prepare(root, facts, report_raw, now=None, source_receipts=None):
             artifact.get('source_hashes') == {name: row['content_hash'] for name, row in metadata.items()},
             'Formal source metadata mismatch')
     receipt, receipt_raw = acquired_input(facts)
+    from sync_tasks import validate_release_publication
+    validate_release_publication(root, facts, receipt)
     validate_formal_assessment(report, receipt)
     require(report.get('runtime_acquisition_sha256') == sha(receipt_raw), 'Formal assessment used different Runtime inputs')
     runtime = {key: receipt[key] for key in RUNTIME_KEYS}

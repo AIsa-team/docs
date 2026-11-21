@@ -131,6 +131,47 @@ class CanonicalArtifactTests(unittest.TestCase):
                 load_runtime(root, artifact_revision=self.revision, compiler_revision=self.compiler,
                              receipt_sha256=fetch.sha(receipt_path.read_bytes()))
 
+    def test_optional_task_catalog_is_verified_but_never_a_raw_provider(self):
+        for canonical_release in (False, True):
+            with self.subTest(canonical=canonical_release):
+                self.setUp()
+                if not canonical_release:
+                    self.contents = fetch.facts_members(self.contents)
+                task_bytes = encoded({'schema_version': 1, 'tasks': []})
+                self.contents[contract.TASK_CATALOG] = task_bytes
+                self.outer()
+                result = self.acquire()
+                self.assertEqual(result[-1]['provider_count'], 1)
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory) / 'acquired'
+                    fetch.save(root, result)
+                    self.assertEqual((root / contract.TASK_CATALOG).read_bytes(), task_bytes)
+                    self.assertFalse((root / 'catalog.json').exists())
+                    facts, _ = load_runtime(root, artifact_revision=self.revision, compiler_revision=self.compiler,
+                        receipt_sha256=fetch.sha((root / 'acquisition-receipt.json').read_bytes()))
+                    self.assertEqual(set(facts), {'index.json', 'example.json', 'category.json'})
+                    (root / contract.TASK_CATALOG).write_bytes(task_bytes + b' ')
+                    with self.assertRaisesRegex(ValueError, 'member differs'):
+                        load_runtime(root, artifact_revision=self.revision, compiler_revision=self.compiler,
+                            receipt_sha256=fetch.sha((root / 'acquisition-receipt.json').read_bytes()))
+                self.contents[contract.TASK_CATALOG] += b' '
+                with self.assertRaisesRegex(ValueError, 'hash'):
+                    self.acquire()
+
+    def test_task_role_is_exact_and_cannot_enter_inner_canonical_manifest(self):
+        self.contents['tasks/other.json'] = b'{}'
+        self.outer()
+        with self.assertRaisesRegex(ValueError, 'Invalid manifest member'):
+            self.acquire()
+        del self.contents['tasks/other.json']
+        self.contents[contract.TASK_CATALOG] = b'{"schema_version":1,"tasks":[]}'
+        self.manifest['files'].append({'path': contract.TASK_CATALOG,
+            'bytes': len(self.contents[contract.TASK_CATALOG]), 'sha256': fetch.sha(self.contents[contract.TASK_CATALOG])})
+        self.contents[contract.MANIFEST] = encoded(self.manifest)
+        self.outer()
+        with self.assertRaisesRegex(ValueError, 'Unknown or duplicate canonical member'):
+            self.acquire()
+
     def test_aggregate_above_bundle_member_bound_uses_runtime_role_bound(self):
         document = native()
         document['info']['description'] = 'x' * 60000
