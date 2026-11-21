@@ -18,6 +18,7 @@ import time
 from fetch_runtime_release import (PublicReader, acquire as acquire_release, decode,
                                    validate_current, require, sha, ACQUISITION_SECONDS)
 from runtime_contract_artifact import TASK_CATALOG
+from readable_contract_notes import safe
 from task_pricing import pricing_markdown
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -235,10 +236,6 @@ def slug(task_id: str) -> str:
     return task_id.replace(".", "-")
 
 
-def prose(text: str) -> str:
-    return re.sub(r"([{}<>])", r"\\\1", text).replace("|", "\\|").replace("\n", " ")
-
-
 def task_page(detail: dict, language: str) -> str:
     c = COPY[language]
     front = f'---\nopenapi: "{page_path(language, "openapi.json")} POST {detail["path"]}"\ntitle: {json.dumps(detail["name"], ensure_ascii=False)}\n---\n'
@@ -250,7 +247,8 @@ def overview(tasks: list[dict], language: str) -> str:
     lines = ["---", "title: " + json.dumps(c["group"], ensure_ascii=False), "---", "", c["intro"], "", f'## {c["list"]}', "", f'| {c["task"]} | {c["description"]} |', '| --- | --- |']
     for task in tasks:
         d = task[language]
-        lines.append(f'| [`{d["task_id"]}`](/{page_path(language, slug(d["task_id"]))}) | {prose(d["name"])} |')
+        name = re.sub(r"[\r\n]+", " ", d["name"])
+        lines.append(f'| [`{d["task_id"]}`](/{page_path(language, slug(d["task_id"]))}) | {safe(name)} |')
     return "\n".join(lines) + "\n"
 
 

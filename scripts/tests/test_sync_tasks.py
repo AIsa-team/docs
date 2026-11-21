@@ -1,5 +1,6 @@
 """Synthetic contract fixtures exercise transformation; no business calls run."""
 import copy
+import html
 import json
 from pathlib import Path
 import sys
@@ -313,6 +314,26 @@ class PublicationTests(unittest.TestCase):
                                  doc["paths"][d["path"]]["post"]["x-aisa-task"])
             docs = json.loads((self.root / "docs.json").read_text())
             self.assertEqual("existing-page", docs["navigation"]["languages"][0]["tabs"][0]["groups"][0]["pages"][0])
+
+    def test_overview_names_remain_literal_text_inside_one_table_cell(self):
+        special = (r'Back\`ticks` [link](https://example.test) ![image](x) *bold* _text_ '
+                   r'\{value} <Widget /> | & &#91;literal&#93;')
+        for name, display in (('Find creators 达人', 'Find creators 达人'),
+                              (special + '\r\nnext\rline\nend', special + ' next line end')):
+            d = detail()
+            d['name'] = name
+            for language in sync.LANGUAGES:
+                page = sync.overview(tasks(d), language)
+                prefix = f'| [`creators.search`](/{sync.page_path(language, "creators-search")}) | '
+                rows = [line for line in page.splitlines() if line.startswith(prefix)]
+                self.assertEqual(len(rows), 1)
+                row = rows[0]
+                self.assertEqual(row.count('|'), 3)
+                self.assertEqual(row.count('`'), 2)
+                self.assertEqual(row.count(']('), 1)
+                cell = row.split('|')[2].strip()
+                self.assertEqual(html.unescape(cell), display)
+                self.assertFalse(any(c in cell for c in '\\`[]{}<>|\r\n*_'))
 
     def test_empty_catalog_withdraws_both_languages_and_navigation(self):
         sync.write(self.root, tasks(detail()), "https://api.aisa.one")
