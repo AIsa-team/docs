@@ -495,6 +495,49 @@ class SurfaceProjectionTests(unittest.TestCase):
         self.raw = {'fixture': (self.root / 'openapi/fixture.json').read_bytes()}
         self.metadata = {'registry': {'providers': {'fixture': {}}}, 'coverage': {'providers': {'fixture': []}},
                          'pending': {'providers': {'fixture': []}}}
+        (self.root / 'openapi/registry.yaml').write_text(yaml.safe_dump(self.metadata['registry']))
+
+    def test_withdrawn_runtime_provider_removes_native_and_generated_bilingual_pages(self):
+        document = json.loads(self.raw['fixture'])
+        document['info'].update({'x-aisa-provider': 'fixture', 'x-aisa-catalogs': {'fixture': {}}})
+        document['info']['x-aisa-document']['facts_hash'] = 'prior-runtime-facts'
+        (self.root / 'openapi/fixture.json').write_bytes(canonical(document))
+        (self.root / 'openapi/registry.yaml').write_text(yaml.safe_dump({
+            'auto_register': True, 'providers': {'fixture': {}}}))
+        metadata = {'registry': {'auto_register': True, 'providers': {}},
+                    'coverage': {'providers': {}}, 'pending': {'providers': {}}}
+        empty = canonical({'openapi': '3.1.0', 'info': {'title': 'Current', 'version': '1'}, 'paths': {}})
+        moved = copy.deepcopy(document)
+        moved['info'].update({'x-aisa-provider': 'other', 'x-aisa-catalogs': {'other': {}}})
+        moved_metadata = copy.deepcopy(metadata)
+        moved_metadata['registry']['providers'] = {'other': {}}
+        moved_changes = importer.project_surfaces(self.root, {'other': canonical(moved)},
+                                                  canonical(moved), moved_metadata)
+        self.assertIsNone(moved_changes['openapi/fixture.json'])
+        self.assertIn('openapi/other.json GET /one', moved_changes['api-reference/fixture/one.mdx'].decode())
+        self.assertIn('openapi/zh/other.json GET /one', moved_changes['zh/api-reference/fixture/one.mdx'].decode())
+        changes = importer.project_surfaces(self.root, {}, empty, metadata)
+        removed = {name for name, raw in changes.items() if raw is None}
+        self.assertEqual(removed, {'openapi/fixture.json', 'openapi/zh/fixture.json',
+                                  'api-reference/fixture/one.mdx', 'zh/api-reference/fixture/one.mdx'})
+        self.assertTrue(all((self.root / name).is_file() for name in removed))
+        for name, raw in changes.items():
+            path = self.root / name
+            if raw is None:
+                path.unlink()
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(raw)
+        self.assertEqual(importer.published_documents(self.root), {})
+        self.assertEqual(surfaces.validate_surfaces(self.root)['status'], 'passed')
+
+    def test_missing_provider_without_runtime_registration_is_not_removed(self):
+        metadata = {'registry': {'auto_register': True, 'providers': {}},
+                    'coverage': {'providers': {}}, 'pending': {'providers': {}}}
+        empty = canonical({'openapi': '3.1.0', 'info': {'title': 'Current', 'version': '1'}, 'paths': {}})
+        changes = importer.project_surfaces(self.root, {}, empty, metadata)
+        self.assertFalse(any(raw is None for raw in changes.values()))
+        self.assertEqual((self.root / 'openapi/fixture.json').read_bytes(), self.raw['fixture'])
 
     def test_disappeared_generated_bilingual_pages_are_removed_before_validation(self):
         from publication_surface import navigation_pages
@@ -531,12 +574,15 @@ class SurfaceProjectionTests(unittest.TestCase):
                 page.write_text(text)
                 self.assertNotIn(page.relative_to(self.root).as_posix(),
                                  disappeared_generated_pages(self.root, previous, missing))
+                self.assertNotIn(page.relative_to(self.root).as_posix(),
+                                 disappeared_generated_pages(self.root, previous, {}, {'fixture'}))
         page.write_text(original)
         self.assertEqual(disappeared_generated_pages(self.root, previous, {}), set())
         self.assertEqual(disappeared_generated_pages(self.root, {}, missing), set())
         moved = copy.deepcopy(missing)
         moved['other'] = previous['fixture']
         self.assertEqual(disappeared_generated_pages(self.root, previous, moved), set())
+        self.assertEqual(disappeared_generated_pages(self.root, previous, moved, {'fixture'}), set())
         previous['fixture']['paths']['/one']['get']['x-aisa-status'] = 'disabled'
         self.assertEqual(disappeared_generated_pages(self.root, previous, previous), set())
 

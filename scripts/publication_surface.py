@@ -82,7 +82,7 @@ def retired_archive(path):
             and 'openapi' not in header)
 
 
-def disappeared_generated_pages(root, previous, native):
+def disappeared_generated_pages(root, previous, native, withdrawn_providers=()):
     """Plan removals only after the caller verifies the complete canonical graph.
 
     Both the old contract identity and generator-owned page body must agree.
@@ -104,8 +104,9 @@ def disappeared_generated_pages(root, previous, native):
             if not isinstance(reference, str) or not isinstance(header.get('x-aisa-operation-id'), str):
                 continue
             match = re.fullmatch(r'(?:openapi(?:-public)?|reference-contracts)/(zh/)?([A-Za-z0-9_.-]+)\.json ([A-Z]+) (\S+)', reference)
-            if not match or bool(match[1]) != bool(prefix) or match[2] not in native:
-                continue  # A missing provider is not proof of a complete graph.
+            if (not match or bool(match[1]) != bool(prefix)
+                    or match[2] not in native and match[2] not in withdrawn_providers):
+                continue  # Only the verified projection can prove provider withdrawal.
             document = previous.get(match[2], {})
             if not document.get('info', {}).get('x-aisa-document', {}).get('document_hash'):
                 continue
