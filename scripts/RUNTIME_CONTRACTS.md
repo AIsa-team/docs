@@ -480,7 +480,19 @@ the result unapproved and non-activatable. Its code SHA is not a publication SHA
 
 The 10-minute pull runs ungated and rebuilds only when the live contract,
 the live category or Docs' generator inputs changed since the last completed
-run. Manual dry runs remain available. For each actual formal publication, the sole
+run. Scheduling ignores the category's cache timestamp and each provider's
+`updated_at`; prices, availability, membership and other category content still
+invalidate the completion cache. Both planning and completion use this same
+fingerprint. Completion reads the acquired category and verifies it against the
+published receipt before recording the key. Formal acquisition evidence retains
+its original fields and validation. Generated `openapi-public/` mirrors are not
+generator inputs.
+
+A scheduled run whose triggering commit is already behind main skips before
+reading Runtime. Compose checks the base again before expensive work and retains
+the final assessed-base push check. The checkout remains at the triggering SHA
+so publication provenance continues to match the authenticated producer run.
+Manual dry runs remain available. For each actual formal publication, the sole
 publisher records `docs/publication/release-origin.json` in the same guarded
 commit, after detecting real staged changes. It binds C, pointer bytes, the
 assessed parent, the producer run/attempt and its original publish-step UTC T0.

@@ -32,8 +32,19 @@ jobs:
       input_key: ${{ steps.live.outputs.input_key }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check the scheduled publication base
+        id: base
+        if: github.event_name == 'schedule'
+        run: |
+          git fetch --no-tags origin main
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)" ]; then
+            echo 'current=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'current=false' >> "$GITHUB_OUTPUT"
+          fi
       - name: Hash the live contract and Docs generator inputs
         id: live
+        if: github.event_name != 'schedule' || steps.base.outputs.current == 'true'
         run: |
           set +e
           python scripts/live_contract_plan.py --github-output "$GITHUB_OUTPUT"
@@ -59,8 +70,12 @@ jobs:
           AVAILABLE: ${{ steps.live.outputs.available }}
           DONE: ${{ steps.done.outputs.cache-hit }}
           GENERATION: ${{ steps.live.outputs.generation }}
+          BASE_CURRENT: ${{ steps.base.outputs.current }}
         run: |
-          if [ "$AVAILABLE" = true ] && [ "$DONE" != true ]; then
+          if [ "$BASE_CURRENT" = false ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo 'Main advanced while this run was queued; waiting for a new scheduled run.' >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$AVAILABLE" = true ] && [ "$DONE" != true ]; then
             echo 'changed=true' >> "$GITHUB_OUTPUT"
             echo "Contract generation $GENERATION or Docs inputs changed; rebuilding mirrors." >> "$GITHUB_STEP_SUMMARY"
           else
@@ -85,6 +100,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Recheck the scheduled publication base before composition
+        if: github.event_name == 'schedule'
+        run: |
+          git fetch --no-tags origin main
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo 'Main changed after planning; retrying on the next scheduled run.' >&2
+            exit 1
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -332,10 +355,12 @@ jobs:
         if: github.ref == 'refs/heads/main' && steps.pull.outputs.available == 'true' && (inputs.publish == true || (github.event_name != 'workflow_dispatch' && vars.RUNTIME_CONTRACT_PUBLISH != 'false'))
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys
           from pathlib import Path
-          from scripts.live_contract_plan import publication_release, published_input_key
+          sys.path.insert(0, 'scripts')
+          from live_contract_plan import publication_release, published_input_key
           print('publication_release=' + publication_release(Path('.')))
-          print('input_key=' + published_input_key(Path('.')))
+          print('input_key=' + published_input_key(Path('.'), Path('/tmp/formal-runtime-facts/category.json')))
           PY
           echo 'completed=true' >> "$GITHUB_OUTPUT"
 

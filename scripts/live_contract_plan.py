@@ -4,8 +4,7 @@
 The input key combines three hashes, so a tick with nothing new is a no-op:
 - the live Services contract content: the sorted "name sha256" pairs listed by
   /public/api-contract/current, excluding generation and other metadata;
-- the live category content (/info/apis/category without cached_at), which
-  the generator also reads;
+- the live category content, excluding cache and provider update timestamps;
 - Docs' own generator inputs: every tracked file except the generated mirror
   outputs, with openapi/registry.yaml counted as an input.
 
@@ -30,7 +29,8 @@ HEX64 = re.compile(r'[0-9a-f]{64}')
 # generator input; registry.yaml is both and counts as an input.
 OUTPUTS = ('openapi/', 'api-reference/', 'zh/api-reference/', 'docs.json', 'llms.txt',
            'openapi.yaml', 'docs/publication/', 'discovery/payment-evidence.json',
-           'discovery/openapi.json', 'tasks/', 'zh/tasks/', 'docs/task-runtime.json')
+           'discovery/openapi.json', 'tasks/', 'zh/tasks/', 'docs/task-runtime.json',
+           'openapi-public/')
 INPUT_OVERRIDES = ('openapi/registry.yaml',)
 MAX_BYTES = 16 << 20
 
@@ -77,10 +77,14 @@ def content_hash(index):
 
 
 def category_hash(category):
-    """Same content rule as fetch_runtime_release.category_content."""
+    """Hash scheduling inputs without changing the formal acquisition evidence."""
     if not isinstance(category, dict) or not isinstance(category.get('apis'), list):
         raise ValueError('invalid category response')
+    if any(not isinstance(provider, dict) for provider in category['apis']):
+        raise ValueError('invalid category provider')
     content = {key: value for key, value in category.items() if key != 'cached_at'}
+    content['apis'] = [{key: value for key, value in provider.items() if key != 'updated_at'}
+                       for provider in category['apis']]
     return hashlib.sha256(json.dumps(content, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -118,11 +122,15 @@ def publication_release(root):
     return revision
 
 
-def published_input_key(root):
+def published_input_key(root, category_path):
     """Record the inputs actually published, even if Runtime advanced after plan."""
+    from fetch_runtime_release import category_content
     receipt = json.loads((root / 'docs/publication/runtime-acquisition.json').read_text())
+    category_raw = category_path.read_bytes()
+    if hashlib.sha256(category_content(category_raw)).hexdigest() != receipt['category_content_sha256']:
+        raise Unavailable('Acquired category differs from the published receipt')
     return input_key(content_hash({'files': receipt['manifest_files']}),
-                     receipt['category_content_sha256'], docs_inputs(root))
+                     category_hash(json.loads(category_raw)), docs_inputs(root))
 
 
 def main(argv=None):
