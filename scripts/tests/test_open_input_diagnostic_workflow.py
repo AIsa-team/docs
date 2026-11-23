@@ -230,6 +230,7 @@ class OpenInputWorkflowTests(unittest.TestCase):
                     'Select exact EKS source input diagnostic',
                     'Check authenticated EKS source input diagnostic compatibility',
                     'Check exact authenticated open-input diagnostic qualification',
+                    'Check actual candidate readiness',
                     'Check explicit reviewed source-only input without claiming formal output'))
             if row.get('uses','').startswith('actions/upload-artifact'):
                 self.assertNotIn('reader-input',row['with']['path']);self.assertNotIn('github.event_path',row['with']['path'])
@@ -265,6 +266,8 @@ class OpenInputWorkflowTests(unittest.TestCase):
                 if row['if']=="steps.open_input_diagnostic.outputs.selected != 'true'": del row['if']
             original.append(row)
         for row in original:
+            if row.get('name') == 'Check actual candidate readiness':
+                self.assertEqual(row['env'].pop('GH_TOKEN'), '${{ github.token }}')
             if row.get('name') == 'Retain candidate assessment':
                 self.assertIn('/tmp/release-gate.json\n', row['with']['path'])
                 row['with']['path'] = row['with']['path'].replace('/tmp/release-gate.json\n', '')

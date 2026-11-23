@@ -11,6 +11,7 @@ from unittest.mock import patch
 import yaml
 sys.path[:0] = [str(Path(__file__).resolve().parents[1]), str(Path(__file__).parent)]
 import runtime_publication as publication
+import check_contract_candidate as candidate
 import fetch_runtime_release as fetch
 from schema_input_bundle import REVIEWED_BASELINE, sha, canonical
 import test_fetch_runtime_release as facts_fixture
@@ -52,6 +53,87 @@ class RuntimePublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'schema mismatch'):
                 publication.stage_canonical(self.root, acquired, baseline=REVIEWED_BASELINE, write=True)
         self.assertEqual(marker.read_bytes(), b'last good')
+
+    def test_candidate_uses_verified_canonical_gate_and_independent_publication_history(self):
+        acquired = self.acquired(True)
+        marker = self.root / 'openapi.yaml'; marker.write_bytes(b'candidate bytes')
+        source_receipts = self.root / 'receipts.json'
+        published_ref, previous = 'a' * 40, 'b' * 40
+        expected = {'status': 'passed', 'scope': 'candidate_only_not_accepted_by_production_formal_export'}
+        with patch.object(candidate.subprocess, 'check_output', return_value=previous + '\n') as history, \
+             patch('canonical_import.assess_canonical_candidate', return_value=expected) as assess, \
+             patch.object(candidate, 'assess_candidate', side_effect=AssertionError('must not recompose')), \
+             patch('runtime_consolidate_openapi.build_unified_spec', side_effect=AssertionError('must not recompose')):
+            report = candidate.assess_publication_candidate(self.root, acquired, REVIEWED_BASELINE,
+                published_ref, source_receipts)
+        history.assert_called_once_with(['git', 'log', '-1', '--format=%H', published_ref,
+            '--', 'docs/publication/release-origin.json'], cwd=self.root, text=True)
+        assess.assert_called_once_with(self.root, self.root, self.root, acquired,
+            previous_ref=previous, source_receipts=source_receipts)
+        self.assertEqual(report, expected)
+        self.assertEqual(marker.read_bytes(), b'candidate bytes')
+
+    def test_candidate_rejects_tampered_or_incomplete_canonical_acquisition_without_fallback(self):
+        acquired = self.acquired(True)
+        for name in ('contracts/native/example.json', 'contracts/openapi.json', 'acquisition-receipt.json'):
+            target = acquired / name
+            original = target.read_bytes()
+            target.unlink()
+            with self.subTest(name=name), \
+                 patch.object(candidate, 'assess_candidate', side_effect=AssertionError('must not fall back')), \
+                 patch('canonical_import.assess_canonical_candidate', side_effect=AssertionError('must verify acquisition')):
+                with self.assertRaises((ValueError, OSError)):
+                    candidate.assess_publication_candidate(self.root, acquired, REVIEWED_BASELINE, 'a' * 40)
+            target.write_bytes(original)
+        receipt_path = acquired / 'acquisition-receipt.json'
+        receipt = json.loads(receipt_path.read_bytes())
+        receipt.pop('canonical_validation')
+        receipt_path.write_text(json.dumps(receipt))
+        with patch.object(candidate, 'assess_candidate', side_effect=AssertionError('must not fall back')):
+            with self.assertRaisesRegex(ValueError, 'Canonical acquisition validation differs'):
+                candidate.assess_publication_candidate(self.root, acquired, REVIEWED_BASELINE, 'a' * 40)
+
+    def test_canonical_candidate_requires_reviewed_baseline_and_independent_full_reference(self):
+        acquired = self.acquired(True)
+        for baseline, published_ref, error in ((None, 'a' * 40, 'reviewed baseline'),
+                ('f' * 40, 'a' * 40, 'reviewed baseline'),
+                (REVIEWED_BASELINE, None, 'published Git SHA'),
+                (REVIEWED_BASELINE, 'main', 'published Git SHA')):
+            with self.subTest(baseline=baseline, published_ref=published_ref), \
+                 patch.object(candidate.subprocess, 'check_output', side_effect=AssertionError('invalid history')):
+                with self.assertRaisesRegex(ValueError, error):
+                    candidate.assess_publication_candidate(self.root, acquired, baseline, published_ref)
+        with patch.object(candidate.subprocess, 'check_output', return_value=''):
+            with self.assertRaisesRegex(ValueError, 'No attributed previous formal publication'):
+                candidate.assess_publication_candidate(self.root, acquired, REVIEWED_BASELINE, 'a' * 40)
+
+    def test_candidate_cli_preserves_canonical_failures_without_fallback(self):
+        acquired = self.acquired(True)
+        report_path = self.root / 'candidate-report.json'
+        arguments = ['check', '--root', str(self.root), '--facts-dir', str(acquired),
+            '--baseline-ref', REVIEWED_BASELINE, '--published-ref', 'a' * 40, '--report', str(report_path)]
+        for failure, expected_status in ((ValueError('Projected native bytes differ from Runtime: example'), 3),
+                ({'status': 'failed', 'global_errors': [{'code': 'fixture_failure'}]}, 1)):
+            with self.subTest(failure=failure), patch.object(sys, 'argv', arguments), patch('builtins.print'), \
+                 patch.object(candidate.subprocess, 'check_output', return_value='b' * 40), \
+                 patch.object(candidate, 'assess_candidate', side_effect=AssertionError('must not fall back')), \
+                 patch('canonical_import.assess_canonical_candidate', side_effect=failure if isinstance(failure, Exception) else None,
+                       return_value=failure):
+                self.assertEqual(candidate.main(), expected_status)
+            report = json.loads(report_path.read_bytes())
+            if isinstance(failure, Exception):
+                self.assertEqual(report['status'], 'not_assessed')
+                self.assertIn('native bytes differ', report['error'])
+            else:
+                self.assertEqual(report, failure)
+
+    def test_fact_only_acquisition_keeps_existing_candidate_checks(self):
+        acquired = self.acquired(False)
+        with patch.object(candidate, 'assess_candidate', side_effect=ValueError('fact candidate rejected')) as assess, \
+             patch('canonical_import.assess_canonical_candidate', side_effect=AssertionError('must use facts')):
+            with self.assertRaisesRegex(ValueError, 'fact candidate rejected'):
+                candidate.assess_publication_candidate(self.root, acquired, REVIEWED_BASELINE, 'a' * 40)
+        assess.assert_called_once_with(self.root, acquired, REVIEWED_BASELINE, 'a' * 40)
 
     def test_canonical_requires_exact_reviewed_baseline_and_attributed_history(self):
         with self.assertRaisesRegex(ValueError, 'reviewed baseline'):

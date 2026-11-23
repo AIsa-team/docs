@@ -71,6 +71,20 @@ candidates are assessed separately.
 
 ## Validation
 
+`check_contract_candidate.py` validates the saved Runtime acquisition before
+selecting its assessment mode. Canonical releases use the same native and
+aggregate byte checks and metadata projection as the publisher; they are not
+recomposed with the current checkout's Composer. Fact-only releases retain the
+local recomposition checks. Invalid canonical evidence fails without falling
+back to fact-only assessment.
+
+Canonical candidate checks require the reviewed `--baseline-ref` and a full,
+independently selected `--published-ref` (the PR base or previous publication).
+The previous formal publication is resolved within that reference's history
+and authenticated using `GH_TOKEN` with read access to repository Actions.
+The candidate check preserves the proposed files and produces a candidate-only
+report; formal publication still uses `runtime_publication.py assess`.
+
 Consumer agreement must also be checked against source-to-Runtime input
 forwarding. Before accepting a unified candidate, run:
 

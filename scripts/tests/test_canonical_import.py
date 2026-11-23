@@ -634,6 +634,69 @@ class SurfaceProjectionTests(unittest.TestCase):
                     check()
                 path.write_bytes(previous)
 
+    def test_generic_response_keeps_canonical_201_and_rejects_local_response_changes(self):
+        from compose_openapi import published_success_responses, UNREVIEWED_SUCCESS_SCHEMA
+        from check_contract_candidate import assess_fresh_contracts
+        document = json.loads(self.raw['fixture'])
+        operation = document['paths']['/one']['get']
+        operation['x-aisa-review'] = {'status': 'unreviewed', 'request': 'reviewed_source', 'response': 'generic'}
+        operation['x-aisa-response-source'] = {'kind': 'published_success_contract'}
+        operation['responses']['201'] = copy.deepcopy(operation['responses']['200'])
+        operation['responses']['201']['description'] = 'Offer request created'
+        operation['responses']['200']['content']['application/json']['schema'] = copy.deepcopy(UNREVIEWED_SUCCESS_SCHEMA)
+        self.assertEqual(published_success_responses(document), {})
+        recomposed = copy.deepcopy(document)
+        recomposed['paths']['/one']['get']['responses'].pop('201')
+        legacy = {'status': 'passed', 'blocked_providers': [],
+                  'providers': {'fixture': {'status': 'passed', 'errors': []}}}
+        assess_fresh_contracts(legacy, {'fixture': document}, {'fixture': recomposed},
+            {'providers': {'fixture': [{'path': '/one', 'method': 'GET', 'status': 'composed'}]}})
+        self.assertEqual(legacy['providers']['fixture']['errors'][0]['code'], 'composed_response_contract_mismatch')
+        operation.update({'x-aisa-validation': 'runtime', 'x-aisa-status': 'enabled'})
+        runtime = copy.deepcopy(document)
+        runtime['paths']['/one']['get']['responses'].pop('201')
+        index = {'providers': [{'id': 'fixture', 'endpoint_count': 1, 'operation_count': 1}],
+                 'pending_providers': [], 'pending_endpoints': [],
+                 'coverage': {'inventory_endpoint_count': 1, 'selected_endpoint_count': 1,
+                              'projected_endpoint_count': 1, 'pending_endpoint_count': 0,
+                              'excluded_endpoints': [], 'projected_endpoints': [{'provider': 'fixture', 'path': '/one'}]}}
+        self.metadata = importer.project_metadata(self.root, {'fixture': runtime}, index,
+            {'apis': [{'id': 'fixture'}]}, {'fixture': document},
+            {'status': 'passed', 'providers': {'fixture': {}}})
+        self.raw['fixture'] = canonical(document)
+        for name in (POLICY_PATH, REBINDING_PATH):
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{}')
+        changes = importer.project_surfaces(self.root, self.raw, self.raw['fixture'], self.metadata)
+        for name, raw in changes.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(raw)
+        def assess():
+            with patch('deferred_definitions.load_deferred_definitions', return_value=None), \
+                 patch('generate_payment_discovery.verify_payment_catalog', return_value={'status': 'passed'}), \
+                 patch('export_contract_publication.source_expiry', return_value=('fixture', None)), \
+                 patch('compose_openapi.compose', side_effect=AssertionError('must preserve canonical responses')):
+                return importer.assess_projected_candidate(self.root, self.root, self.raw, self.raw['fixture'],
+                    self.metadata, baseline_coverage={'providers': {}}, published_ref=None,
+                    source_receipts={'receipts': {}}, checked_at=datetime.now(timezone.utc))
+        report = assess()
+        self.assertEqual(report['status'], 'passed', report)
+        self.assertEqual(report['evaluation'], 'actual_publication_graph_and_runtime_canonical')
+        self.assertEqual(report['scope'], 'candidate_only_not_accepted_by_production_formal_export')
+        self.assertEqual((self.root / 'openapi/fixture.json').read_bytes(), self.raw['fixture'])
+        for change in ('removed_201', 'changed_201_schema'):
+            changed = copy.deepcopy(document)
+            responses = changed['paths']['/one']['get']['responses']
+            if change == 'removed_201':
+                responses.pop('201')
+            else:
+                responses['201']['content']['application/json']['schema'] = {'type': 'string'}
+            (self.root / 'openapi/fixture.json').write_bytes(canonical(changed))
+            with self.subTest(change=change), self.assertRaisesRegex(ValueError, 'native bytes differ from Runtime'):
+                assess()
+
     def test_production_reference_pages_remain_the_bound_pages(self):
         for page in ('api-reference/fixture/one.mdx', 'zh/api-reference/fixture/one.mdx'):
             path = self.root / page
