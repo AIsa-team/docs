@@ -1,3 +1,4 @@
+import copy
 import hashlib
 import json
 import os
@@ -39,12 +40,56 @@ class ContentHashTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 plan.content_hash(bad)
 
-    def test_category_ignores_only_the_cache_timestamp(self):
-        category = {'apis': [{'id': 'a'}], 'cached_at': 1}
-        self.assertEqual(plan.category_hash(category), plan.category_hash({**category, 'cached_at': 2}))
+    def test_category_ignores_cache_and_provider_update_timestamps(self):
+        category = {'apis': [{'id': 'a', 'updated_at': '2026-11-21T10:00:00Z'}], 'cached_at': 1}
+        refreshed = {'apis': [{'id': 'a', 'updated_at': '2026-11-23T10:00:00Z'}], 'cached_at': 2}
+        self.assertEqual(plan.category_hash(category), plan.category_hash(refreshed))
+        self.assertEqual(plan.category_hash(category), plan.category_hash({'apis': [{'id': 'a'}]}))
         self.assertNotEqual(plan.category_hash(category), plan.category_hash({'apis': [{'id': 'b'}], 'cached_at': 1}))
-        with self.assertRaises(ValueError):
-            plan.category_hash({'cached_at': 1})
+        self.assertEqual(category['apis'][0]['updated_at'], '2026-11-21T10:00:00Z')
+        for invalid in ({'cached_at': 1}, {'apis': [None]}, {'apis': ['a']}):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                plan.category_hash(invalid)
+
+    def test_category_preserves_prices_availability_and_unknown_content(self):
+        category = {'apis': [{'id': 'a'}]}
+        for field, value in {'name': 'Example', 'category': 'search', 'is_active': False,
+                             'endpoint_count': 2, 'pricing': {'normal': 0.02},
+                             'x-aisa-plans': {'payg': 2}, 'description': 'Changed',
+                             'docs_href': '/new', 'tags': ['search'], 'future_field': True}.items():
+            changed = copy.deepcopy(category)
+            changed['apis'][0][field] = value
+            with self.subTest(field=field):
+                self.assertNotEqual(plan.category_hash(category), plan.category_hash(changed))
+        self.assertNotEqual(plan.category_hash(category), plan.category_hash({'apis': []}))
+        self.assertNotEqual(plan.category_hash(category), plan.category_hash({**category, 'updated_at': 2}))
+
+
+class CompletionKeyTests(unittest.TestCase):
+    def test_completion_uses_the_published_category_with_the_scheduling_hash(self):
+        from fetch_runtime_release import category_content
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            publication = root / 'docs/publication'
+            publication.mkdir(parents=True)
+            category_path = root / 'category.json'
+            category = {'apis': [{'id': 'a', 'updated_at': '2026-11-23T10:00:00Z'}], 'cached_at': 1}
+            category_path.write_text(json.dumps(category))
+            current = index(('tasks/catalog.json', '2' * 64))
+            receipt = {'manifest_files': current['files'],
+                       'category_content_sha256': hashlib.sha256(category_content(category_path.read_bytes())).hexdigest()}
+            (publication / 'runtime-acquisition.json').write_text(json.dumps(receipt))
+            category['cached_at'] = 2
+            category_path.write_text(json.dumps(category))
+            with patch.object(plan, 'docs_inputs', return_value='docs'):
+                self.assertEqual(plan.published_input_key(root, category_path),
+                                 plan.plan(current, category, 'docs')['input_key'])
+                for field, value in [('updated_at', '2026-11-23T11:00:00Z'), ('pricing', {'normal': 0.03})]:
+                    changed = copy.deepcopy(category)
+                    changed['apis'][0][field] = value
+                    category_path.write_text(json.dumps(changed))
+                    with self.subTest(field=field), self.assertRaisesRegex(plan.Unavailable, 'published receipt'):
+                        plan.published_input_key(root, category_path)
 
 
 class DocsInputTests(unittest.TestCase):
@@ -53,7 +98,8 @@ class DocsInputTests(unittest.TestCase):
                      'docs.json', 'llms.txt', 'openapi.yaml', 'docs/publication/current.json',
                      'discovery/openapi.json', 'discovery/payment-evidence.json',
                      'tasks/openapi.json', 'tasks/example-task.mdx', 'zh/tasks/example-task.mdx',
-                     'docs/task-runtime.json'):
+                     'docs/task-runtime.json', 'openapi-public/openapi.json',
+                     'openapi-public/openapi.yaml', 'openapi-public/zh/example.json'):
             self.assertFalse(plan.is_input(path), path)
         for path in ('openapi/registry.yaml', 'scripts/canonical_import.py', 'translations/openapi-zh.json',
                      'docs/human-api-retirements.json', 'README.md'):
@@ -66,12 +112,15 @@ class DocsInputTests(unittest.TestCase):
                 subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@example.invalid', *args],
                                cwd=root, check=True, capture_output=True)
             (root / 'openapi').mkdir()
+            (root / 'openapi-public').mkdir()
             (root / 'scripts').mkdir()
             (root / 'openapi/x.json').write_text('{}')
+            (root / 'openapi-public/x.json').write_text('{}')
             (root / 'scripts/gen.py').write_text('a = 1\n')
             git('init', '-q'); git('add', '.'); git('commit', '-qm', 'base')
             base = plan.docs_inputs(root)
             (root / 'openapi/x.json').write_text('{"regenerated": true}')
+            (root / 'openapi-public/x.json').write_text('{"regenerated": true}')
             git('commit', '-qam', 'mirror')
             self.assertEqual(plan.docs_inputs(root), base)
             (root / 'openapi/registry.yaml').write_text('providers: {}\n')
@@ -159,6 +208,19 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(steps['done']['with']['lookup-only'])
         self.assertEqual(steps['done']['with']['key'], 'pull-openapi-done-${{ steps.live.outputs.input_key }}-${{ steps.live.outputs.publication_release }}')
 
+    def test_scheduled_base_checks_preserve_the_triggering_commit_and_manual_dry_runs(self):
+        steps = {step.get('id'): step for step in self.jobs['plan']['steps']}
+        self.assertEqual(steps['base']['if'], "github.event_name == 'schedule'")
+        self.assertEqual(steps['live']['if'], "github.event_name != 'schedule' || steps.base.outputs.current == 'true'")
+        compose_steps = self.jobs['compose']['steps']
+        guard = next(step for step in compose_steps if step.get('name') == 'Recheck the scheduled publication base before composition')
+        self.assertEqual(guard['if'], "github.event_name == 'schedule'")
+        setup = next(step for step in compose_steps if step.get('uses', '').startswith('actions/setup-python'))
+        self.assertLess(compose_steps.index(guard), compose_steps.index(setup))
+        for job in ('plan', 'compose'):
+            checkout = next(step for step in self.jobs[job]['steps'] if step.get('uses', '').startswith('actions/checkout'))
+            self.assertNotIn('ref', checkout.get('with', {}))
+
     def test_only_a_completed_publishing_run_is_remembered(self):
         compose_steps = self.jobs['compose']['steps']
         completed = next(step for step in compose_steps if step.get('id') == 'completed')
@@ -180,6 +242,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('::warning::', warn['run'])
 
     def test_publication_cache_tracks_reenable_price_changes_and_actual_acquisition(self):
+        from fetch_runtime_release import category_content
         steps = {s.get('id'): s for s in self.jobs['plan']['steps']}
         completed = next(s for s in self.jobs['compose']['steps'] if s.get('id') == 'completed')
         save = next(s for s in self.jobs['record']['steps'] if s.get('uses', '').startswith('actions/cache/save'))
@@ -203,14 +266,15 @@ class WorkflowTests(unittest.TestCase):
                    'GITHUB_STEP_SUMMARY': str(root / 'summary')}
             # A and its re-enable have identical bytes, including the Task hash.
             # Only the manifest Task member changes for B (disabled) and C (price).
-            for digest, publish, changed in (('a', 'a', True), ('a', None, False),
+            for attempt, (digest, publish, changed) in enumerate((('a', 'a', True), ('a', None, False),
                                               ('b', 'b', True), ('b', None, False),
                                               ('a', 'a', True), ('a', None, False),
                                               ('c', 'c', True), ('c', None, False),
                                               ('d', 'e', True), ('e', None, False),
-                                              ('d', 'd', True), ('d', None, False)):
+                                              ('d', 'd', True), ('d', None, False))):
                 current = index(('index.json', '1' * 64), ('tasks/catalog.json', digest * 64))
-                responses = {plan.CURRENT: current, plan.CATEGORY: {'apis': []}}
+                responses = {plan.CURRENT: current, plan.CATEGORY: {
+                    'apis': [{'id': 'example', 'updated_at': f'update-{attempt}'}], 'cached_at': attempt}}
                 out = root / 'plan-output'
                 out.unlink(missing_ok=True)
                 with patch.object(plan, 'fetch', side_effect=lambda base, path: responses[path]):
@@ -226,12 +290,17 @@ class WorkflowTests(unittest.TestCase):
                 if publish:
                     pointer.write_text(json.dumps({'status': 'passed', 'contract_release': publish * 64}))
                     actual = index(('index.json', '1' * 64), ('tasks/catalog.json', publish * 64))
+                    category = copy.deepcopy(responses[plan.CATEGORY])
+                    category['apis'][0]['updated_at'] += '-acquired'
+                    category_path = root / 'category.json'
+                    category_path.write_text(json.dumps(category))
                     receipt = {'manifest_files': actual['files'],
-                               'category_content_sha256': plan.category_hash(responses[plan.CATEGORY])}
+                               'category_content_sha256': hashlib.sha256(category_content(category_path.read_bytes())).hexdigest()}
                     (pointer.parent / 'runtime-acquisition.json').write_text(json.dumps(receipt))
                     done = root / 'completed'
                     done.unlink(missing_ok=True)
-                    subprocess.run(['bash', '-e', '-c', completed['run']], check=True, cwd=root,
+                    script = completed['run'].replace('/tmp/formal-runtime-facts/category.json', str(category_path))
+                    subprocess.run(['bash', '-e', '-c', script], check=True, cwd=root,
                                    env={**env, 'GITHUB_OUTPUT': str(done)})
                     outputs = dict(line.split('=', 1) for line in done.read_text().splitlines())
                     self.assertEqual(outputs['completed'], 'true')

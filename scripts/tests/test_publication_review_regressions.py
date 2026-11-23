@@ -194,6 +194,47 @@ class PublicationRaceTests(unittest.TestCase):
             receipt = json.loads(self.git(root, '--git-dir=remote.git', 'show', 'main:docs/publication/release-origin.json'))
             self.assertEqual(receipt['run_id'], '123')
 
+    def test_queued_old_base_skips_planning_and_stops_before_composition(self):
+        workflow = yaml.safe_load((REPO / '.github/workflows/pull-openapi.yml').read_text())
+        plan_steps = {step.get('id'): step for step in workflow['jobs']['plan']['steps']}
+        guard = next(step for step in workflow['jobs']['compose']['steps']
+                     if step.get('name') == 'Recheck the scheduled publication base before composition')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            seed, candidate = self.setup_checkout(root)
+            triggering_commit = self.git(candidate, 'rev-parse', 'HEAD')
+            output = root / 'base-output'
+            env = {**os.environ, 'GITHUB_OUTPUT': str(output), 'GITHUB_STEP_SUMMARY': str(root / 'summary')}
+            current = subprocess.run(['bash', '-e', '-c', plan_steps['base']['run']], cwd=candidate,
+                                     env=env, capture_output=True, text=True)
+            self.assertEqual(current.returncode, 0, current.stderr)
+            self.assertEqual(output.read_text().strip(), 'current=true')
+            ready = subprocess.run(['bash', '-e', '-c', guard['run']], cwd=candidate,
+                                   env=env, capture_output=True, text=True)
+            self.assertEqual(ready.returncode, 0, ready.stderr)
+
+            (seed / 'new-input.txt').write_text('new main input\n')
+            self.git(seed, 'add', '.')
+            self.git(seed, 'commit', '-qm', 'main advanced')
+            self.git(seed, 'push', '-q', 'origin', 'main')
+            output.unlink()
+            stale = subprocess.run(['bash', '-e', '-c', plan_steps['base']['run']], cwd=candidate,
+                                   env=env, capture_output=True, text=True)
+            self.assertEqual(stale.returncode, 0, stale.stderr)
+            self.assertEqual(output.read_text().strip(), 'current=false')
+            output.unlink()
+            decision = subprocess.run(['bash', '-e', '-c', plan_steps['decide']['run']], cwd=candidate,
+                                      env={**env, 'BASE_CURRENT': 'false', 'AVAILABLE': 'true',
+                                           'DONE': 'false', 'GENERATION': '2'}, capture_output=True, text=True)
+            self.assertEqual(decision.returncode, 0, decision.stderr)
+            self.assertEqual(output.read_text().strip(), 'changed=false')
+            self.assertIn('queued', (root / 'summary').read_text())
+            blocked = subprocess.run(['bash', '-e', '-c', guard['run']], cwd=candidate,
+                                     env=env, capture_output=True, text=True)
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn('Main changed after planning', blocked.stderr)
+            self.assertEqual(self.git(candidate, 'rev-parse', 'HEAD'), triggering_commit)
+
     def test_source_maintenance_has_its_own_bounded_schedule(self):
         workflow = yaml.safe_load((REPO / '.github/workflows/refresh-upstream.yml').read_text())
         trigger = workflow.get('on', workflow.get(True))
