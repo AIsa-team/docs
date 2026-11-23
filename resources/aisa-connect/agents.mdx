@@ -1,0 +1,313 @@
+---
+title: "Use AIsa Connect with agents"
+sidebarTitle: "Use with agents"
+icon: "robot"
+description: "Let an AI agent find and run app actions for your users: through the AIsa MCP server, or by turning action input schemas into tools for OpenAI, Anthropic, the Vercel AI SDK and LangChain."
+---
+
+An agent can use AIsa Connect in two ways:
+
+| | MCP server | Function calling |
+| --- | --- | --- |
+| Best for | Agents in MCP clients such as Claude Code, Cursor, Codex or VS Code | Agents you build with a model SDK or framework |
+| Sign-in | Browser OAuth, or an API key header | Your API key, from your backend |
+| Tools the model sees | AIsa's meta tools, which reach every Connect operation | One tool per action you choose, built from its `inputSchema` |
+
+Both use the same API, end users, connections and pricing.
+
+## MCP
+
+### Connect your client
+
+Point the client at `https://mcp.aisa.one/mcp`. Authorization is OAuth: the client opens a browser and you click Allow once. Clients without a browser send `Authorization: Bearer YOUR_AISA_API_KEY` instead. Per-client setup is in [Connect via MCP](/agent-quickstart).
+
+```bash
+# Claude Code
+claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+
+# Codex
+codex mcp add aisa --url https://mcp.aisa.one/mcp
+```
+
+A personal MCP or CLI sign-in acts as your AIsa account, so the agent sees the same connections as your API keys. Runs need a positive balance, as with an API key.
+
+### Connect operations over MCP
+
+The MCP server reaches every endpoint through a few meta tools: `search`, `list_categories`, `get_details` and `batch_quote` are free, and `batch_use` runs the calls. AIsa Connect appears there as these operations, with the same IDs as the [API reference](/resources/aisa-connect#api-at-a-glance):
+
+| Operation | ID | Charge |
+| --- | --- | --- |
+| List apps | `get_aisa_connector_apis_v1_connector_apps` | Free |
+| List the actions of an app | `get_aisa_connector_apis_v1_connector_apps_app_actions` | Free |
+| Get an action | `get_aisa_connector_apis_v1_connector_actions_actionkey` | Free |
+| Start a hosted connect | `get_aisa_connector_apis_v1_connector_connect_app` | Free |
+| Connect with credentials | `post_aisa_connector_apis_v1_connector_connect_app_0fbeef` | Free |
+| Get a connect session | `get_aisa_connector_apis_v1_connector_connect_sess_bfc4e5` | Free |
+| List connections | `get_aisa_connector_apis_v1_connector_connections` | Free |
+| Get a connection | `get_aisa_connector_apis_v1_connector_connections__b41217` | Free |
+| Disconnect a connection | `delete_aisa_connector_apis_v1_connector_connectio_b41217` | Free |
+| Run an action | `post_aisa_connector_apis_v1_connector_actions_run` | USD 0.0003 per successful run |
+
+Take the exact tool names and arguments from `search` or `get_details`; do not invent them.
+
+### How the agent finds an app's actions
+
+App actions such as `gmail.search_threads` or `google_search_console.query_search_analytics` are **not** separate MCP tools. `search` finds the Connect operations above, not the actions inside each app. The reliable path is:
+
+<Steps>
+  <Step title="List the app's actions">
+    Call **List the actions of an app** with the app key (`gmail`, `google_search_console`, `shopify`, ...) and, optionally, `q` to filter by key, name or description. If the app key is unknown, call **List apps** with `q` first.
+  </Step>
+  <Step title="Read the action's schema">
+    Each action in the list carries its `inputSchema` and `operationType`. Call **Get an action** for one action when needed.
+  </Step>
+  <Step title="Run it">
+    Call **Run an action** with `actionKey`, the end user's `externalUserId` and an `input` that matches the schema. Price it with `batch_quote` first, as for any paid call.
+  </Step>
+</Steps>
+
+A prompt that works well:
+
+```text
+Use AIsa Connect. List the actions of the google_search_console app,
+pick the one that queries search analytics, read its input schema, then run it
+for end user console-user-12345 for property https://www.example.com/
+comparing the last 28 days with the 28 days before.
+```
+
+### Which end user ID to use
+
+- **Your own accounts.** Connect them in the [Console](/resources/aisa-connect/console). The Console connects them as end user `console-user-<your user id>`; copy it from the app's page and give it to the agent.
+- **Your customers' accounts.** Pass the same `externalUserId` your backend uses for them.
+- **Connecting from the agent.** The agent can call **Start a hosted connect** and show you the `connectUrl`. Open the complete link in a browser and authorize, then let the agent poll **Get a connect session**.
+
+### AIsa CLI
+
+The [AIsa CLI](/get-started/cli) reaches the same operations: `aisa search`, then `aisa schema` when needed, `aisa quote`, and `aisa call` with the operation IDs above. Sign in with `aisa login`, or set `AISA_API_KEY` for CI.
+
+## Function calling
+
+When you build the agent yourself, turn the actions it needs into tools. Each action already has a JSON Schema for its input, so a tool definition is a direct mapping:
+
+| Action field | Tool field |
+| --- | --- |
+| `key` (`gmail.search_threads`) | Tool name. Replace `.` with `__`, because most model APIs allow only letters, digits, `_` and `-` in tool names |
+| `description` | Tool description |
+| `inputSchema` | Tool parameters / input schema |
+
+Then, when the model calls a tool, your code calls `POST /actions/run` with the action key, **your** end user ID and the model's arguments as `input`, and returns `output` (or the error) to the model.
+
+The examples below give the model Gmail's read actions that match `thread`, and use AIsa as the model provider, so one AIsa key covers both the model and AIsa Connect. Any model provider works the same way.
+
+### Shared helpers (Python)
+
+```python
+import json
+import os
+
+import requests
+
+AISA_KEY = os.environ["AISA_API_KEY"]
+CONNECT = "https://api.aisa.one/apis/v1/connector"
+HEADERS = {"Authorization": f"Bearer {AISA_KEY}"}
+END_USER = "store_8812"  # from your signed-in user, never from the model
+
+
+def load_actions(app, q=None):
+    params = {"q": q} if q else {}
+    r = requests.get(f"{CONNECT}/apps/{app}/actions", headers=HEADERS, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()["data"]
+
+
+def tool_name(action_key):
+    return action_key.replace(".", "__")
+
+
+def object_schema(action):
+    schema = action.get("inputSchema") or {}
+    return schema if schema.get("type") == "object" else {"type": "object", "properties": {}}
+
+
+def run_action(action_key, args, idempotency_key=None):
+    headers = dict(HEADERS)
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
+    r = requests.post(
+        f"{CONNECT}/actions/run",
+        headers=headers,
+        json={"actionKey": action_key, "externalUserId": END_USER, "input": args},
+        timeout=120,
+    )
+    body = r.json()
+    if r.status_code != 200:
+        return json.dumps({"error": body.get("error")})  # let the model see what went wrong
+    return json.dumps(body["output"])
+
+
+actions = [a for a in load_actions("gmail", "thread") if a["operationType"] == "read"]
+by_name = {tool_name(a["key"]): a["key"] for a in actions}
+PROMPT = "Find emails about the launch this week and summarize the decisions."
+```
+
+### Model SDKs
+
+<CodeGroup>
+
+```python OpenAI
+from openai import OpenAI
+
+client = OpenAI(api_key=AISA_KEY, base_url="https://api.aisa.one/v1")
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": tool_name(a["key"]),
+            "description": a["description"],
+            "parameters": object_schema(a),
+        },
+    }
+    for a in actions
+]
+
+messages = [{"role": "user", "content": PROMPT}]
+while True:
+    resp = client.chat.completions.create(model="gpt-5.4-mini", messages=messages, tools=tools)
+    msg = resp.choices[0].message
+    if not msg.tool_calls:
+        print(msg.content)
+        break
+    messages.append(msg)
+    for call in msg.tool_calls:
+        args = json.loads(call.function.arguments or "{}")
+        result = run_action(by_name[call.function.name], args, idempotency_key=call.id)
+        messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+```
+
+```python Anthropic
+import anthropic
+
+client = anthropic.Anthropic(api_key=AISA_KEY, base_url="https://api.aisa.one")
+tools = [
+    {"name": tool_name(a["key"]), "description": a["description"], "input_schema": object_schema(a)}
+    for a in actions
+]
+
+messages = [{"role": "user", "content": PROMPT}]
+while True:
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001", max_tokens=2048, tools=tools, messages=messages
+    )
+    if resp.stop_reason != "tool_use":
+        print("".join(b.text for b in resp.content if b.type == "text"))
+        break
+    messages.append({"role": "assistant", "content": resp.content})
+    results = []
+    for block in resp.content:
+        if block.type == "tool_use":
+            output = run_action(by_name[block.name], block.input, idempotency_key=block.id)
+            results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
+    messages.append({"role": "user", "content": results})
+```
+
+```python LangChain
+from langchain_core.messages import HumanMessage
+from langchain_core.tools import StructuredTool
+from langchain_openai import ChatOpenAI
+
+
+def make_tool(action):
+    return StructuredTool.from_function(
+        func=lambda **kwargs: run_action(action["key"], kwargs),
+        name=tool_name(action["key"]),
+        description=action["description"],
+        args_schema=object_schema(action),
+    )
+
+
+tools = [make_tool(a) for a in actions]
+by_tool = {t.name: t for t in tools}
+llm = ChatOpenAI(model="gpt-5.4-mini", api_key=AISA_KEY, base_url="https://api.aisa.one/v1")
+llm_with_tools = llm.bind_tools(tools)
+
+messages = [HumanMessage(PROMPT)]
+while True:
+    ai = llm_with_tools.invoke(messages)
+    messages.append(ai)
+    if not ai.tool_calls:
+        print(ai.content)
+        break
+    for call in ai.tool_calls:
+        messages.append(by_tool[call["name"]].invoke(call))
+```
+
+</CodeGroup>
+
+### Vercel AI SDK (TypeScript)
+
+```typescript
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateText, jsonSchema, stepCountIs, tool } from "ai";
+
+const CONNECT = "https://api.aisa.one/apis/v1/connector";
+const HEADERS = { Authorization: `Bearer ${process.env.AISA_API_KEY}` };
+const END_USER = "store_8812"; // from your signed-in user, never from the model
+
+async function loadActions(app: string, q?: string): Promise<any[]> {
+  const qs = q ? `?${new URLSearchParams({ q })}` : "";
+  const res = await fetch(`${CONNECT}/apps/${app}/actions${qs}`, { headers: HEADERS });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()).data;
+}
+
+async function runAction(actionKey: string, input: unknown) {
+  const res = await fetch(`${CONNECT}/actions/run`, {
+    method: "POST",
+    headers: { ...HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify({ actionKey, externalUserId: END_USER, input }),
+  });
+  const body = await res.json();
+  return res.ok ? body.output : { error: body.error };
+}
+
+const actions = (await loadActions("gmail", "thread")).filter((a) => a.operationType === "read");
+const tools = Object.fromEntries(
+  actions.map((a) => [
+    a.key.replaceAll(".", "__"),
+    tool({
+      description: a.description,
+      inputSchema: jsonSchema(a.inputSchema?.type === "object" ? a.inputSchema : { type: "object", properties: {} }),
+      execute: (input) => runAction(a.key, input),
+    }),
+  ]),
+);
+
+const aisa = createOpenAI({ apiKey: process.env.AISA_API_KEY, baseURL: "https://api.aisa.one/v1" });
+const { text } = await generateText({
+  model: aisa.chat("gpt-5.4-mini"),
+  tools,
+  stopWhen: stepCountIs(5),
+  prompt: "Find emails about the launch this week and summarize the decisions.",
+});
+console.log(text);
+```
+
+### Generic tools for a large catalog
+
+Gmail alone has dozens of actions, and the catalog has well over a thousand apps. Instead of one tool per action, you can give the model three generic tools, the same pattern the MCP server uses:
+
+| Tool | Calls |
+| --- | --- |
+| `list_actions(app, q)` | `GET /apps/{app}/actions?q=...` and returns `key`, `description`, `operationType` and `inputSchema` |
+| `get_action(actionKey)` | `GET /actions/{actionKey}` |
+| `run_action(actionKey, input)` | `POST /actions/run` with your end user ID |
+
+The model then discovers actions at run time. Validation still protects you: a run whose `input` does not match the schema returns `422 validation_failed` with the problems, which the model can fix.
+
+## Guardrails
+
+- **Set the end user in your code.** Take `externalUserId` from your signed-in user, never from the model's arguments, so a prompt cannot make the agent act in another user's account.
+- **Start with `read` actions.** Expose `write` and `destructive` actions only when you need them, and ask the user to approve each one before your code runs it.
+- **Retry writes safely.** Send an `Idempotency-Key`, such as the tool call ID, so a repeated call returns the first answer instead of running twice. After `app_error` or `outcome_unknown`, check in the app before retrying.
+- **Handle reconnects.** On `409 reconnect_required` or `connection_required`, stop and ask the user to connect the app, rather than letting the model retry.
+- **Keep outputs small.** Some actions return large payloads. Trim `output` before you return it to the model if your context window is tight.

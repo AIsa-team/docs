@@ -1,0 +1,166 @@
+---
+title: "Running actions"
+sidebarTitle: "Running actions"
+icon: "play"
+description: "Discover AIsa Connect apps and actions, read input schemas, run an action for an end user, retry safely with Idempotency-Key, and handle write actions."
+---
+
+An action is one operation an app offers, such as `shopify.list_orders` or `gmail.search_threads`. You discover actions in the catalog, then run them for an end user who has a connection to the app.
+
+Examples on this page use `AISA_BASE=https://api.aisa.one/apis/v1/connector` and your key in `AISA_API_KEY`, as set up in the [Quickstart](/resources/aisa-connect/quickstart#before-you-start).
+
+## Discover apps and actions
+
+Reading the catalog is free.
+
+### List apps
+
+```bash
+# q searches keys, names, aliases and categories; limit is 1–5000, default 50
+curl -s "$AISA_BASE/apps?q=shopify&limit=20" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "key": "shopify",
+      "name": "Shopify",
+      "description": "...",
+      "aliases": ["..."],
+      "categories": [{ "id": "...", "name": "..." }],
+      "authTypes": ["api_key", "oauth2"],
+      "iconUrl": "...",
+      "homepageUrl": "...",
+      "documentationUrl": "..."
+    }
+  ]
+}
+```
+
+- `q` is a case-insensitive substring match on the app's key, name, aliases and category IDs and names.
+- There is no pagination. Raise `limit` (up to 5000) to get more apps in one response. A `limit` outside 1–5000 returns `400 invalid_request` with `param: "limit"`.
+- To browse the catalog without code, use [aisa.one/catalog/connectors](https://aisa.one/catalog/connectors) or the [Console](/resources/aisa-connect/console).
+
+### List the actions of an app
+
+```bash
+# q filters by key, name and description
+curl -s "$AISA_BASE/apps/shopify/actions?q=order" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  | jq '.data[] | {key, name, operationType}'
+```
+
+The response has every matching action of the app in `data`, without pagination. An unknown app returns `404 not_found`.
+
+### Get one action
+
+```bash
+# Use the key exactly as the list returns it.
+curl -s "$AISA_BASE/actions/shopify.get_shop" \
+  -H "Authorization: Bearer $AISA_API_KEY" | jq '.inputSchema'
+```
+
+An action has `key`, `app`, `name`, `description`, `operationType` (`read`, `write` or `destructive`), `requiredScopes`, `inputSchema` and `outputSchema`. An unknown action returns `404 not_found` with `param: "actionKey"`.
+
+## Read the input schema
+
+`inputSchema` is a JSON Schema (draft 2020-12) object. Build `input` from it:
+
+- Fill every property listed in `required`.
+- Respect `type`, `enum`, formats and the `description` of each property; the descriptions explain the app-specific values.
+- If the schema sets `"additionalProperties": false`, send no other properties. Otherwise, properties the schema does not declare are passed through.
+
+Some actions page through results themselves. When they do, the page size and the cursor or page token are fields in their `inputSchema` and `outputSchema`; the Connect API adds no pagination of its own.
+
+## Operation types
+
+| `operationType` | Meaning | Recommended handling |
+| --- | --- | --- |
+| `read` | Reads data; changes nothing | Safe to run automatically |
+| `write` | Creates or changes data in the app | Confirm with the end user unless they asked for exactly this change |
+| `destructive` | Deletes data or makes a change that is hard to undo | Always confirm with the end user first |
+
+The catalog lists every action an app offers, but the connected account decides what a run may do. For example, Google apps connect with read-only access in production, so their `write` and `destructive` actions are refused by the app. See [App permissions](/resources/aisa-connect/security#app-permissions).
+
+## Run an action
+
+```bash
+curl -s -i -X POST "$AISA_BASE/actions/run" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-sync-8812-2026-11-12" \
+  -d '{"actionKey": "shopify.get_shop", "externalUserId": "store_8812", "input": {}}'
+```
+
+| Body field | Required | Meaning |
+| --- | --- | --- |
+| `actionKey` | Yes | The action, as `<app>.<action name>` |
+| `externalUserId` | Yes | The end user to act for |
+| `connectionId` | No | One of that end user's connections to the action's app. Without it, AIsa uses the end user's newest `active` connection for the app |
+| `input` | No | A JSON object matching `inputSchema`. Omitted or `null` is treated as `{}` |
+
+The `Idempotency-Key` header is optional; see [Retries and idempotency](#retries-and-idempotency). Unknown body fields are rejected with `400 invalid_request`, and the body can be at most 1 MiB.
+
+```http
+HTTP/1.1 200 OK
+X-AISA-Customer-Cost-Micros-USD: 300
+
+{"runId": "run_...", "connectionId": "con_...", "output": {...}}
+```
+
+- **Which connection.** The response tells you which connection the run used. A `connectionId` of another end user returns `404 not_found`; one of another app returns `400 invalid_request`; one that is not `active` returns `409 reconnect_required`.
+- **Input validation.** `input` is checked against the action's `inputSchema` before anything is sent. A mismatch returns `422 validation_failed`, with `path` and `message` for up to 10 problems in `error.details.errors`. An `input` that is not a JSON object also returns `422 validation_failed`.
+- **The app can still refuse.** If the app rejects the input, the run returns `422 validation_failed` ("the app integration refused the input"). If the app finds nothing for the input, such as an unknown order ID, it returns `404 not_found` with `param: "input"`. If the connected account lacks the permission the action needs, it returns `400 invalid_request`.
+- **No automatic retries.** Each run is sent to the app once. AIsa never retries it for you.
+- **Run ID.** Errors that happen after the run was sent carry `error.details.runId`. Include it when you contact us.
+
+```json
+{
+  "error": {
+    "message": "input does not match the action's input schema",
+    "type": "invalid_request_error",
+    "code": "validation_failed",
+    "param": "input",
+    "details": {
+      "errors": [{ "path": "/first", "message": "..." }]
+    },
+    "retryable": false,
+    "retryHint": "never"
+  }
+}
+```
+
+<Warning>
+Treat `write` and `destructive` actions with care. Check `operationType` before you run an action, and confirm with the end user when the action changes their data. If a write returns `app_error` or `outcome_unknown`, the change may already have happened: check the result in the app before you decide to retry, so you do not write twice.
+</Warning>
+
+## Retries and idempotency
+
+AIsa sends each run once and never retries it. To retry safely after a timeout or a dropped connection, send an `Idempotency-Key` header (1–191 characters) that is unique to the run:
+
+- A retry with the same key and the same request, within 24 hours, gets the stored answer of the first run with the header `Idempotent-Replayed: true`. This applies to runs that reached the app: successes, `app_error` and `outcome_unknown`. The run is not sent again and not charged again.
+- If the first run is still in progress, a retry returns `409 idempotency_conflict`. Wait briefly and retry.
+- The same key with a different request returns `409 idempotency_conflict` with `param: "Idempotency-Key"`.
+- A run that never reached the app, for example because it was rate limited, the connection needed reconnecting or the service was unavailable, stores no answer. Retrying with the same key runs it.
+- Keys are scoped to your API key.
+
+Without an `Idempotency-Key`, every request is a new run.
+
+## Typical run errors
+
+| HTTP | `code` | What to do |
+| --- | --- | --- |
+| 422 | `validation_failed` | Fix `input` using `details.errors` and the schema |
+| 409 | `connection_required` | The end user has no connection to the app. [Connect](/resources/aisa-connect/authorize-users) first |
+| 409 | `reconnect_required` | Ask the end user to [reconnect](/resources/aisa-connect/authorize-users#reconnect-a-connection) |
+| 429 | `rate_limited` | Wait for `Retry-After`, then retry |
+| 502 | `app_error`, `outcome_unknown` | Check in the app before you retry a write |
+| 402 | `insufficient_balance`, `insufficient_wallet_balance`, `insufficient_api_key_balance` | Top up, or adjust the key's limit |
+
+The full list is in [Errors & troubleshooting](/resources/aisa-connect/errors).
+
+## Billing
+
+Only successful runs are charged, at USD 0.0003 per run, and the `X-AISA-Customer-Cost-Micros-USD` header reports the charge. Failed runs and everything else in AIsa Connect are free. See [Pricing & limits](/resources/aisa-connect/pricing-and-limits).

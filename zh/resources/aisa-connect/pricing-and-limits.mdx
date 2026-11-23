@@ -1,0 +1,61 @@
+---
+title: "AIsa Connect 价格与限制"
+sidebarTitle: "价格与限制"
+icon: "credit-card"
+description: "AIsa Connect 对哪些操作收费、余额检查如何进行、有效连接数上限，以及按 key 的限流。"
+---
+
+## 哪些操作收费
+
+- 只有**执行成功**的动作收费，每次 **USD 0.0003**（300 micro-USD）。所有套餐同一价格，不叠加套餐倍率。
+- 失败一律不收费，包括校验失败、没有连接、需要重新连接、被限流、应用报错和结果未知。
+- 浏览目录、发起连接、查看和删除连接都免费。
+- 每次执行的实际扣费在响应头 `X-AISA-Customer-Cost-Micros-USD` 里，单位是 micro-USD（1 USD = 1,000,000 micro-USD）。
+- 用之前执行保存的响应应答的重试（带 `Idempotent-Replayed: true`）不会再次收费。见[重试和幂等](/zh/resources/aisa-connect/actions#重试和幂等)。
+
+执行费用从你和模型、数据 API 共用的余额里扣。充值和 key 消费限额见[计费与额度](/zh/guides/pricing)。
+
+| 操作 | 费用 |
+| --- | --- |
+| `GET /apps`、`GET /apps/{app}/actions`、`GET /actions/{actionKey}` | 免费 |
+| `GET /connect/{app}`、`GET /connect/sessions/{sessionId}`、`POST /connect/{app}/credentials` | 免费 |
+| `GET /connections`、`GET /connections/{connectionId}`、`DELETE /connections/{connectionId}` | 免费 |
+| `POST /actions/run` | 每次成功执行 USD 0.0003 |
+
+## 余额检查
+
+执行发出前，AIsa 会检查两次余额：
+
+1. **余额门槛。** 账户余额必须大于零；如果 API Key 设置了消费限额，限额也不能用完。否则请求失败，返回[标准错误格式](/zh/resources/aisa-connect/errors#错误格式)的 `402 insufficient_balance`，`message` 是 "the account balance or this key's budget is exhausted"。`POST /connect/{app}/credentials` 也有同样的门槛，因为应用要校验凭证，尽管连接本身免费。
+2. **预留费用。** AIsa 会预留一次执行的费用。余额不足时返回 `402`，动作不会发出。
+
+预留费用阶段的 `402`，响应体和[其他错误](/zh/resources/aisa-connect/errors)不同：
+
+```json
+{ "error": { "code": "insufficient_wallet_balance", "message": "...", "retryable": false } }
+```
+
+如果 API Key 设置了消费限额并且已经用完，`code` 是 `insufficient_api_key_balance`。充值或调整 key 的限额见[计费与额度](/zh/guides/pricing)。
+
+## 连接数上限
+
+一个 AIsa 账户默认最多有 **100 个有效连接**，这是你所有终端用户合计的数量。`needs_reconnect` 状态的连接也计入，已删除的不计入。超出后发起连接返回 `403 user_quota_exceeded`，托管会话也会以 `failed` 和同一个错误码结束。请删除不用的连接，或联系 [developer@aisa.one](mailto:developer@aisa.one) 提高上限。
+
+带 `connectionId` 重新连接已有连接，不算新连接。
+
+## 限流
+
+按 API Key 限流：
+
+| 请求类型 | 上限 |
+| --- | --- |
+| 读请求（目录、会话、连接） | 每分钟 300 次 |
+| 写请求（执行动作、发起连接、删除连接） | 每分钟 60 次 |
+
+- 每个响应都带 `X-RateLimit-Limit`、`X-RateLimit-Remaining` 和 `X-RateLimit-Reset`（距离额度重置的秒数），对应这个 key 的读或写额度。
+- 超限时 AIsa 返回 `429 rate_limited`，并带 `Retry-After` 响应头。被限流的请求不收费。
+- 写请求还共享一个账户级额度（你所有 key 合计）和一个服务整体额度。突发流量很大时，单个 key 还没到每分钟 60 次也可能收到 `429`。
+- 应用自己也可能限流。这时执行返回 `429 rate_limited`；应用给了等待时间时，会原样放在 `Retry-After` 和 `error.details.retryAfterSeconds` 里。
+- 用 OAuth 登录的 MCP 和 CLI 客户端适用同样的限制。
+
+为了分散负载，轮询连接会话时每 2–3 秒查一次即可，不要连续请求；应用和动作目录很少变化，可以缓存。

@@ -1,0 +1,238 @@
+---
+title: "AIsa Connect 快速开始"
+sidebarTitle: "快速开始"
+icon: "rocket"
+description: "通过托管授权页，为一个测试终端用户连接 Google Search Console 账号，然后执行第一个动作。大约五分钟。"
+---
+
+这篇快速开始会通过 AIsa 托管授权页，连接**一个终端用户**的 Google Search Console 账号，再用这个连接执行一个只读动作。整个过程你一人分饰两角：调用 API 的开发者，以及在浏览器里授权的终端用户。
+
+你需要：
+
+- 一个 AIsa API Key（在[控制台 → API Keys](https://console.aisa.one/api-keys) 创建），且余额大于零。除最后一步执行动作外都免费；执行成功收费 USD 0.0003。
+- 一个至少能看到一个 Search Console 资源（property）的 Google 账号。换成其他 `oauth2` 应用也是同样的流程，只需改应用 key 和动作。
+- `curl` 和 `jq`，或者装了 `requests` 的 Python 3，或者 Node.js 18 及以上。
+
+<Note>
+想先点一遍界面？打开 [console.aisa.one/apps](https://console.aisa.one/apps)，选一个应用，点 **连接账号**。见[控制台指南](/zh/resources/aisa-connect/console)。
+</Note>
+
+## 准备
+
+```bash
+export AISA_BASE=https://api.aisa.one/apis/v1/connector
+export AISA_API_KEY=YOUR_AISA_API_KEY   # keep the key out of your code repository
+export END_USER=quickstart_user_1        # your own ID for the end user
+```
+
+请从你的后端调用 AIsa Connect，不要把 API Key 放进浏览器或移动端应用。
+
+## 动手做一遍
+
+<Steps>
+  <Step title="找到应用">
+    在目录里搜索。`q` 会匹配应用的 key、名称、别名和分类。
+
+    ```bash
+    curl -s -G "$AISA_BASE/apps" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      --data-urlencode "q=search console" \
+      | jq '.data[] | {key, name, authTypes}'
+    ```
+
+    ```json
+    { "key": "google_search_console", "name": "Google Search Console", "authTypes": ["oauth2"] }
+    ```
+
+    `authTypes` 是 `oauth2`，所以终端用户要通过托管授权页连接。
+  </Step>
+  <Step title="选一个动作，看它的 schema">
+    ```bash
+    curl -s "$AISA_BASE/apps/google_search_console/actions" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      | jq '.data[] | {key, operationType}'
+
+    curl -s "$AISA_BASE/actions/google_search_console.list_sites" \
+      -H "Authorization: Bearer $AISA_API_KEY" | jq '.inputSchema'
+    ```
+
+    `google_search_console.list_sites` 是一个 `read` 动作，列出已连接的 Google 账号能看到的资源。先看一下它 `inputSchema` 里的 `required`；本文的 `input` 传 `{}`。
+  </Step>
+  <Step title="发起托管连接会话">
+    ```bash
+    curl -s -G "$AISA_BASE/connect/google_search_console" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      --data-urlencode "externalUserId=$END_USER"
+    ```
+
+    ```json
+    {
+      "connectUrl": "https://.../connect/cs_...#<secret>",
+      "connectSessionId": "cs_...",
+      "expiresAt": "..."
+    }
+    ```
+
+    会话 30 分钟内有效。不传 `redirectUrl` 时，终端用户最后会停在 AIsa 的结果页，快速开始用这个就够了。
+  </Step>
+  <Step title="以终端用户身份授权">
+    在浏览器里打开**完整的** `connectUrl`，包括 `#` 后面的部分。登录 Google 并允许访问。完成后页面会显示 **应用账号已连接**（英文界面为 **App account connected**）。
+  </Step>
+  <Step title="确认连接">
+    在服务端轮询会话，直到 `state` 变成 `completed`、`failed` 或 `expired`：
+
+    ```bash
+    curl -s "$AISA_BASE/connect/sessions/cs_..." \
+      -H "Authorization: Bearer $AISA_API_KEY"
+    ```
+
+    ```json
+    { "id": "cs_...", "app": "google_search_console", "state": "completed", "connectionId": "con_...", "expiresAt": "..." }
+    ```
+  </Step>
+  <Step title="执行动作">
+    ```bash
+    curl -s -i -X POST "$AISA_BASE/actions/run" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d "{\"actionKey\": \"google_search_console.list_sites\", \"externalUserId\": \"$END_USER\", \"input\": {}}"
+    ```
+
+    ```http
+    HTTP/1.1 200 OK
+    X-AISA-Customer-Cost-Micros-USD: 300
+
+    {"runId": "run_...", "connectionId": "con_...", "output": {...}}
+    ```
+
+    `output` 是应用返回的结果，结构见动作的 `outputSchema`。响应头里是本次扣费，单位 micro-USD：300 即 USD 0.0003。
+  </Step>
+</Steps>
+
+## 用代码走一遍
+
+下面两段脚本做的是第 3 到第 6 步：发起会话、打印链接、等待连接完成，然后执行动作。
+
+<CodeGroup>
+
+```python Python
+import os
+import time
+
+import requests
+
+BASE = "https://api.aisa.one/apis/v1/connector"
+HEADERS = {"Authorization": f"Bearer {os.environ['AISA_API_KEY']}"}
+END_USER = "quickstart_user_1"
+APP = "google_search_console"
+ACTION = "google_search_console.list_sites"
+
+# 1. Start a hosted connect session for the end user.
+start = requests.get(
+    f"{BASE}/connect/{APP}",
+    headers=HEADERS,
+    params={"externalUserId": END_USER},
+    timeout=30,
+)
+start.raise_for_status()
+session = start.json()
+print("Open this link and authorize:\n", session["connectUrl"])
+
+# 2. Poll the session until it finishes.
+while True:
+    time.sleep(3)
+    state = requests.get(
+        f"{BASE}/connect/sessions/{session['connectSessionId']}",
+        headers=HEADERS,
+        timeout=30,
+    ).json()
+    if state["state"] in ("completed", "failed", "expired"):
+        break
+if state["state"] != "completed":
+    raise SystemExit(f"Not connected: {state.get('error')}")
+print("Connected:", state["connectionId"])
+
+# 3. Run the action for the end user.
+run = requests.post(
+    f"{BASE}/actions/run",
+    headers=HEADERS,
+    json={"actionKey": ACTION, "externalUserId": END_USER, "input": {}},
+    timeout=120,
+)
+body = run.json()
+if run.status_code != 200:
+    raise SystemExit(f"Run failed: {body['error']['code']}: {body['error']['message']}")
+print("Cost (micro-USD):", run.headers.get("X-AISA-Customer-Cost-Micros-USD"))
+print(body["output"])
+```
+
+```typescript TypeScript
+const BASE = "https://api.aisa.one/apis/v1/connector";
+const HEADERS = { Authorization: `Bearer ${process.env.AISA_API_KEY}` };
+const END_USER = "quickstart_user_1";
+const APP = "google_search_console";
+const ACTION = "google_search_console.list_sites";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// 1. Start a hosted connect session for the end user.
+const params = new URLSearchParams({ externalUserId: END_USER });
+const startRes = await fetch(`${BASE}/connect/${APP}?${params}`, { headers: HEADERS });
+if (!startRes.ok) throw new Error(`Start failed: ${await startRes.text()}`);
+const session = await startRes.json();
+console.log("Open this link and authorize:\n", session.connectUrl);
+
+// 2. Poll the session until it finishes.
+let state: any;
+do {
+  await sleep(3000);
+  const res = await fetch(`${BASE}/connect/sessions/${session.connectSessionId}`, { headers: HEADERS });
+  state = await res.json();
+} while (!["completed", "failed", "expired"].includes(state.state));
+if (state.state !== "completed") throw new Error(`Not connected: ${JSON.stringify(state.error)}`);
+console.log("Connected:", state.connectionId);
+
+// 3. Run the action for the end user.
+const runRes = await fetch(`${BASE}/actions/run`, {
+  method: "POST",
+  headers: { ...HEADERS, "Content-Type": "application/json" },
+  body: JSON.stringify({ actionKey: ACTION, externalUserId: END_USER, input: {} }),
+});
+const body = await runRes.json();
+if (!runRes.ok) throw new Error(`Run failed: ${body.error.code}: ${body.error.message}`);
+console.log("Cost (micro-USD):", runRes.headers.get("X-AISA-Customer-Cost-Micros-USD"));
+console.log(body.output);
+```
+
+</CodeGroup>
+
+## 遇到问题
+
+| 现象 | 怎么办 |
+| --- | --- |
+| `401 unauthorized` | 检查 key，以及是否用 `Authorization: Bearer ...` 发送 |
+| 执行时返回 `402 insufficient_balance` 或 `insufficient_wallet_balance` | 在控制台充值 |
+| 会话以 `failed` 结束，错误码 `connect_denied` | 用户在 Google 同意页拒绝了授权。重新发起会话并允许访问 |
+| 会话以 `expired` 结束 | 30 分钟内没人完成授权。重新发起会话 |
+| 执行时返回 `409 connection_required` | 执行时的 `externalUserId` 和连接时的不一致。两次调用用同一个 ID |
+| `400 invalid_request`，提示 "the app refused this action for the connected account" | 该账号缺少这个动作需要的权限。生产环境的 Google 应用是只读的，请用 `read` 动作 |
+| 所有路径都返回 `404` 和 `{"error":"api endpoint not found"}` | AIsa Connect 在这个环境暂时不可用，请联系 [developer@aisa.one](mailto:developer@aisa.one) |
+
+完整列表见[错误与排查](/zh/resources/aisa-connect/errors)。
+
+## 下一步
+
+<CardGroup cols={2}>
+  <Card title="为终端用户授权" icon="user-check" href="/zh/resources/aisa-connect/authorize-users">
+    用 `redirectUrl` 把用户带回你的应用、连接凭证类应用、重新连接。
+  </Card>
+  <Card title="执行动作" icon="play" href="/zh/resources/aisa-connect/actions">
+    输入 schema、校验、幂等重试和写操作安全。
+  </Card>
+  <Card title="在智能体中使用" icon="robot" href="/zh/resources/aisa-connect/agents">
+    让智能体通过 MCP 或函数调用发现并执行动作。
+  </Card>
+  <Card title="管理连接" icon="plug" href="/zh/resources/aisa-connect/connections">
+    查看、检查和删除终端用户的连接。
+  </Card>
+</CardGroup>

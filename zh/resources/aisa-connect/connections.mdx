@@ -1,0 +1,105 @@
+---
+title: "管理连接"
+sidebarTitle: "管理连接"
+icon: "plug"
+description: "列出、查询和删除终端用户的 AIsa Connect 连接，了解连接状态，处理重新连接和连接数上限。"
+---
+
+连接是某个终端用户连接的一个应用账号。查看和删除连接都免费。
+
+本页示例使用 `AISA_BASE=https://api.aisa.one/apis/v1/connector`，key 放在 `AISA_API_KEY` 里，设置方法见[快速开始](/zh/resources/aisa-connect/quickstart#准备)。
+
+## 列出连接
+
+```bash
+# Both filters are optional; newest first
+curl -s -G "$AISA_BASE/connections" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  --data-urlencode "externalUserId=store_8812" \
+  --data-urlencode "app=shopify"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "con_...",
+      "app": "shopify",
+      "externalUserId": "store_8812",
+      "status": "active",
+      "scopes": [],
+      "connectedAt": "2026-11-12T08:00:00Z",
+      "updatedAt": "2026-11-12T08:00:00Z"
+    }
+  ]
+}
+```
+
+- 不带过滤参数时，返回你 AIsa 账户下所有终端用户的全部连接。
+- `externalUserId` 按原样精确匹配，区分大小写。
+- 已删除（`disconnected`）的连接不会列出。
+- 列表不分页，一次返回所有符合条件的连接。
+
+## 查询单个连接
+
+```bash
+curl -s "$AISA_BASE/connections/con_..." \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+<Warning>
+`GET /connections/{connectionId}` 和 `DELETE /connections/{connectionId}` 只校验连接属于**你的 AIsa 账户**，不校验终端用户。请在你的后端保存“连接属于哪个终端用户”的对应关系，不要让终端用户自己传入任意连接 ID。
+</Warning>
+
+## 删除连接
+
+```bash
+curl -s -X DELETE "$AISA_BASE/connections/con_..." \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+删除后返回该连接，`"status": "disconnected"`。之后再查询返回 `404 not_found`，再删除一次也返回 `404 not_found`。
+
+删除会把已授权的账号从 AIsa 的应用集成里移除，AIsa 之后不能再用它执行动作。在 `connectionId` 里指定已删除连接的执行会返回 `404 not_found`；不带 `connectionId` 的执行会使用这个终端用户在该应用下的另一个 `active` 连接，没有的话返回 `409 connection_required`。
+
+## 连接状态
+
+| `status` | 含义 |
+| --- | --- |
+| `active` | 连接可用。 |
+| `needs_reconnect` | 应用不再接受这个授权，需要用户[重新连接](/zh/resources/aisa-connect/authorize-users#重新连接)。 |
+| `disconnected` | 已删除，不再出现在列表里。 |
+
+以下情况连接会变成 `needs_reconnect`：执行时应用拒绝了这个连接的授权（执行返回 `409 reconnect_required`），或者重新连接时用户登录了另一个账号。如果应用报告这个账号已经不存在，AIsa 会把连接标为 `disconnected`，执行返回 `409 connection_required`。
+
+AIsa 只在用到连接时更新它的状态：执行、重新连接或删除。没有后台检查，所以 `GET /connections/{connectionId}` 显示的是最近一次已知的状态。想确认连接是否仍然可用，就用它执行一个 `read` 动作。
+
+## 重新连接
+
+`oauth2` 类连接通过托管授权页、带上 `connectionId` 重新连接，连接 ID 保持不变。见[重新连接](/zh/resources/aisa-connect/authorize-users#重新连接)。
+
+凭证类应用请用新凭证重新连接，再删除旧连接。
+
+## 多个终端用户和多个连接
+
+- 每个终端用户的连接相互独立。为一个 `externalUserId` 执行时，绝不会用到其他终端用户的连接。
+- 一个终端用户可以连接多个应用，每个应用各有自己的连接。
+- 如果同一个终端用户在同一个应用下有不止一个连接，不传 `connectionId` 的执行会使用最新的 `active` 连接。传 `connectionId` 可以指定用哪个。
+- 不带 `connectionId` 再次连接同一个应用，可能会新增一个连接，而不是替换旧连接。不需要的连接请删除。
+
+## 连接数上限
+
+一个 AIsa 账户默认最多有 **100 个有效连接**，这是你所有终端用户合计的数量。超出后发起连接返回 `403 user_quota_exceeded`。请删除不用的连接，或联系我们提高上限。处于 `needs_reconnect` 的连接在删除之前也计入上限。
+
+## 在你这边保存记录
+
+建议你的后端为每个连接至少保存这些字段：
+
+| 字段 | 用途 |
+| --- | --- |
+| 你的终端用户 ID | 列出连接和执行时使用同一个 `externalUserId` |
+| `id`（`con_…`） | 传 `connectionId`、重新连接或删除 |
+| `app` | 向用户展示连接了哪个应用 |
+| `status` | 提示用户重新连接 |
+
+应用的令牌和凭证由 AIsa 保管，你不需要保存它们。

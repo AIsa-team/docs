@@ -1,0 +1,166 @@
+---
+title: "执行动作"
+sidebarTitle: "执行动作"
+icon: "play"
+description: "发现 AIsa Connect 的应用和动作，读懂输入 schema，为终端用户执行动作，用 Idempotency-Key 安全重试，并谨慎处理写操作。"
+---
+
+动作是应用提供的一个操作，例如 `shopify.list_orders` 或 `gmail.search_threads`。你先在目录里找到动作，再为已经连接了这个应用的终端用户执行它。
+
+本页示例使用 `AISA_BASE=https://api.aisa.one/apis/v1/connector`，key 放在 `AISA_API_KEY` 里，设置方法见[快速开始](/zh/resources/aisa-connect/quickstart#准备)。
+
+## 发现应用和动作
+
+浏览目录免费。
+
+### 应用列表
+
+```bash
+# q searches keys, names, aliases and categories; limit is 1–5000, default 50
+curl -s "$AISA_BASE/apps?q=shopify&limit=20" \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+```json
+{
+  "data": [
+    {
+      "key": "shopify",
+      "name": "Shopify",
+      "description": "...",
+      "aliases": ["..."],
+      "categories": [{ "id": "...", "name": "..." }],
+      "authTypes": ["api_key", "oauth2"],
+      "iconUrl": "...",
+      "homepageUrl": "...",
+      "documentationUrl": "..."
+    }
+  ]
+}
+```
+
+- `q` 不区分大小写，在应用的 key、名称、别名，以及分类 ID 和名称里做子串匹配。
+- 没有分页。想一次拿到更多应用，就调大 `limit`（最大 5000）。`limit` 超出 1–5000 时返回 `400 invalid_request`，`param` 是 `limit`。
+- 不写代码也能浏览目录：[aisa.one/catalog/connectors](https://aisa.one/catalog/connectors) 或[控制台](/zh/resources/aisa-connect/console)。
+
+### 某个应用的动作
+
+```bash
+# q filters by key, name and description
+curl -s "$AISA_BASE/apps/shopify/actions?q=order" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  | jq '.data[] | {key, name, operationType}'
+```
+
+响应的 `data` 里是这个应用所有符合条件的动作，不分页。应用不存在时返回 `404 not_found`。
+
+### 单个动作
+
+```bash
+# Use the key exactly as the list returns it.
+curl -s "$AISA_BASE/actions/shopify.get_shop" \
+  -H "Authorization: Bearer $AISA_API_KEY" | jq '.inputSchema'
+```
+
+动作的字段有 `key`、`app`、`name`、`description`、`operationType`（`read`、`write` 或 `destructive`）、`requiredScopes`、`inputSchema` 和 `outputSchema`。动作不存在时返回 `404 not_found`，`param` 是 `actionKey`。
+
+## 读懂输入 schema
+
+`inputSchema` 是一个 JSON Schema（draft 2020-12）对象。按它来构造 `input`：
+
+- `required` 里列出的属性都要填。
+- 注意每个属性的 `type`、`enum`、格式和 `description`；应用特有的取值都写在描述里。
+- 如果 schema 设置了 `"additionalProperties": false`，就不要传其他属性。否则，schema 没声明的属性会原样透传。
+
+有些动作自己会分页读取数据。这时页大小和游标（或 page token）是它 `inputSchema` 和 `outputSchema` 里的字段；Connect API 本身不额外分页。
+
+## 操作类型
+
+| `operationType` | 含义 | 建议做法 |
+| --- | --- | --- |
+| `read` | 只读取数据，不做任何修改 | 可以自动执行 |
+| `write` | 在应用里新建或修改数据 | 除非用户明确要求这次修改，否则先和用户确认 |
+| `destructive` | 删除数据，或做难以撤销的修改 | 一律先和用户确认 |
+
+目录会列出应用提供的全部动作，但一次执行能做什么，取决于已连接账号的授权。比如生产环境里 Google 应用以只读权限连接，它们的 `write` 和 `destructive` 动作会被应用拒绝。见[应用权限](/zh/resources/aisa-connect/security#应用权限)。
+
+## 执行动作
+
+```bash
+curl -s -i -X POST "$AISA_BASE/actions/run" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: order-sync-8812-2026-11-12" \
+  -d '{"actionKey": "shopify.get_shop", "externalUserId": "store_8812", "input": {}}'
+```
+
+| 请求体字段 | 必填 | 含义 |
+| --- | --- | --- |
+| `actionKey` | 是 | 动作，格式 `<app>.<动作名>` |
+| `externalUserId` | 是 | 代表哪个终端用户执行 |
+| `connectionId` | 否 | 该终端用户在这个动作所属应用下的某个连接。不传时，AIsa 使用该终端用户在这个应用下最新的 `active` 连接 |
+| `input` | 否 | 符合 `inputSchema` 的 JSON 对象。不传或传 `null` 都按 `{}` 处理 |
+
+`Idempotency-Key` 请求头可选，见[重试和幂等](#重试和幂等)。请求体里有多余字段会返回 `400 invalid_request`，请求体最大 1 MiB。
+
+```http
+HTTP/1.1 200 OK
+X-AISA-Customer-Cost-Micros-USD: 300
+
+{"runId": "run_...", "connectionId": "con_...", "output": {...}}
+```
+
+- **用哪个连接。** 响应会告诉你这次执行用的是哪个连接。`connectionId` 属于其他终端用户时返回 `404 not_found`；属于别的应用时返回 `400 invalid_request`；不是 `active` 时返回 `409 reconnect_required`。
+- **输入校验。** `input` 会先按动作的 `inputSchema` 校验，再发给应用。不合格返回 `422 validation_failed`，`error.details.errors` 里最多列出 10 条问题，每条有 `path` 和 `message`。`input` 不是 JSON 对象时也返回 `422 validation_failed`。
+- **应用仍可能拒绝。** 应用拒绝了输入时，返回 `422 validation_failed`（"the app integration refused the input"）。应用按输入什么也没找到（例如订单 ID 不存在）时，返回 `404 not_found`，`param` 是 `input`。已连接账号缺少动作需要的权限时，返回 `400 invalid_request`。
+- **不自动重试。** 每次执行只发给应用一次，AIsa 不会替你重试。
+- **执行 ID。** 执行发出之后才出现的错误，`error.details.runId` 里带本次执行的 ID，联系我们时请附上。
+
+```json
+{
+  "error": {
+    "message": "input does not match the action's input schema",
+    "type": "invalid_request_error",
+    "code": "validation_failed",
+    "param": "input",
+    "details": {
+      "errors": [{ "path": "/first", "message": "..." }]
+    },
+    "retryable": false,
+    "retryHint": "never"
+  }
+}
+```
+
+<Warning>
+谨慎对待 `write` 和 `destructive` 动作。执行前先看 `operationType`，会修改终端用户数据的动作要先和用户确认。写操作遇到 `app_error` 或 `outcome_unknown` 时，改动可能已经生效：先到应用里确认结果，再决定要不要重试，避免重复写入。
+</Warning>
+
+## 重试和幂等
+
+AIsa 每次执行只发一次，也不会替你重试。超时或连接中断后要安全重试，请带上一个对这次执行唯一的 `Idempotency-Key` 请求头（1–191 个字符）：
+
+- 24 小时内用同一个 key 发同样的请求，会拿到第一次执行保存下来的响应，并带响应头 `Idempotent-Replayed: true`。这适用于已经到达应用的执行：成功、`app_error` 和 `outcome_unknown`。动作不会再次发出，也不会再次收费。
+- 如果第一次执行还没结束，重试返回 `409 idempotency_conflict`。稍等片刻再试。
+- 同一个 key 配不同的请求，返回 `409 idempotency_conflict`，`param` 是 `Idempotency-Key`。
+- 没有到达应用的执行（例如被限流、连接需要重新授权、服务暂时不可用）不保存响应，用同一个 key 重试会真正执行。
+- key 的作用范围是你的 API Key。
+
+不带 `Idempotency-Key` 时，每个请求都是一次新的执行。
+
+## 常见执行错误
+
+| HTTP | `code` | 怎么办 |
+| --- | --- | --- |
+| 422 | `validation_failed` | 按 `details.errors` 和 schema 修正 `input` |
+| 409 | `connection_required` | 该终端用户还没有连接这个应用，先[连接](/zh/resources/aisa-connect/authorize-users) |
+| 409 | `reconnect_required` | 让终端用户[重新连接](/zh/resources/aisa-connect/authorize-users#重新连接) |
+| 429 | `rate_limited` | 等待 `Retry-After` 后重试 |
+| 502 | `app_error`、`outcome_unknown` | 重试写操作前先到应用里确认 |
+| 402 | `insufficient_balance`、`insufficient_wallet_balance`、`insufficient_api_key_balance` | 充值，或调整 key 的限额 |
+
+完整列表见[错误与排查](/zh/resources/aisa-connect/errors)。
+
+## 计费
+
+只有执行成功才收费，每次 USD 0.0003，扣费金额见响应头 `X-AISA-Customer-Cost-Micros-USD`。失败的执行以及 AIsa Connect 的其他操作都免费。见[价格与限制](/zh/resources/aisa-connect/pricing-and-limits)。

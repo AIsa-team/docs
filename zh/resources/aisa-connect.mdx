@@ -1,6 +1,6 @@
 ---
 title: "AIsa Connect"
-sidebarTitle: "AIsa Connect"
+sidebarTitle: "概览"
 icon: "link"
 description: "让你的终端用户连接自己的 Shopify、WooCommerce、GitHub、Google 等应用账号，再用一个 AIsa API Key 浏览应用目录，并代表他们执行应用动作。"
 ---
@@ -14,8 +14,40 @@ AIsa Connect 让你的终端用户（例如你服务的商家）把自己的 Sho
 - 你的产品要在**你的用户**自己的应用账号里做事，又不想为每个应用分别开发 OAuth 应用、维护凭证库。
 - 你想要一份统一的应用和动作目录，每个动作都带输入的 JSON Schema，而不是每个应用接一套 SDK。
 - 你只想为执行成功的动作付费，并且和模型、数据 API 共用一个余额。
+- 你的 AI 智能体需要读取或操作用户自己的账号，例如 Gmail、Search Console 或 Shopify 店铺，并且要在运行时自己发现可用的工具。
 
 如果只是读取不需要用户账号的公开数据（例如电商平台商品），请用[数据 API](/zh/resources/data-apis)。要用一种请求格式覆盖多个社媒和广告平台，见 [Unified API](/zh/resources/unified-apis)。
+
+## 典型用例
+
+| 你在做的产品 | AIsa Connect 帮你做什么 |
+| --- | --- |
+| 面向 Shopify 商家的运营助手 | 每个商家连接一次店铺，你的智能体用 `shopify.list_orders` 列出未发货订单，用 `shopify.get_inventory_quantities` 查库存 |
+| SEO 报表工具 | 每个客户授权 Google Search Console，你的后端读取他们站点的搜索表现数据 |
+| 邮箱或客服副驾 | 每个用户授权 Gmail，你的智能体用 `gmail.search_threads` 搜索他们的邮件会话 |
+| 在 Claude Code、Cursor 或 Codex 里用的内部智能体 | 你在控制台连接自己的账号，智能体通过 AIsa MCP 服务器执行动作 |
+
+## 工作原理
+
+```mermaid
+flowchart LR
+  U["终端用户"] -->|"1. 授权应用<br/>（托管授权页或凭证）"| A["AIsa Connect"]
+  Y["你的后端或智能体"] -->|"2. 执行动作<br/>actionKey + externalUserId"| A
+  A -->|"3. 用该用户的连接<br/>调用应用"| P["Shopify、Gmail、GitHub……"]
+  A -->|"4. 返回 output<br/>只对成功的执行收费"| Y
+```
+
+<Steps>
+  <Step title="选定应用和动作">
+    在目录里搜索应用，查看它的 `authTypes`，再查看动作的 `inputSchema`。浏览目录免费。见[执行动作](/zh/resources/aisa-connect/actions#发现应用和动作)。
+  </Step>
+  <Step title="连接终端用户的账号">
+    `api_key` 和 `custom_credential` 类应用：在你的界面里收集字段，转交给 AIsa。`oauth2` 类应用：把用户带到 AIsa 托管授权页，再轮询会话。见[为终端用户授权](/zh/resources/aisa-connect/authorize-users)。
+  </Step>
+  <Step title="执行动作">
+    调用 `POST /actions/run`，带上动作 key、`externalUserId` 和符合 schema 的 `input`。见[执行动作](/zh/resources/aisa-connect/actions)。
+  </Step>
+</Steps>
 
 ## 核心概念
 
@@ -28,344 +60,11 @@ AIsa Connect 让你的终端用户（例如你服务的商家）把自己的 Sho
 | **连接会话**（`cs_…`） | 一次托管 OAuth 授权流程，30 分钟后过期。 |
 | **执行**（`run_…`） | 为某个终端用户执行一次动作。只有执行成功才收费。 |
 
-## 接入流程
+每个概念的详细说明，包括连接归谁所有、权限范围怎么生效，见[核心概念](/zh/resources/aisa-connect/concepts)。
 
-<Steps>
-  <Step title="选定应用和动作">
-    在目录里搜索应用，查看它的 `authTypes` 和 `credentialFields`，再查看动作的 `inputSchema`。浏览目录免费。见[浏览应用和动作](#浏览应用和动作)。
-  </Step>
-  <Step title="连接终端用户的账号">
-    `api_key` 和 `custom_credential` 类应用：在你的界面里收集字段，转交给 AIsa。`oauth2` 类应用：把用户带到 AIsa 托管授权页，再轮询会话。见[用凭证连接](#用凭证连接)和[托管授权连接](#托管授权连接)。
-  </Step>
-  <Step title="执行动作">
-    调用 `POST /actions/run`，带上动作 key、`externalUserId` 和符合 schema 的 `input`。见[执行动作](#执行动作)。
-  </Step>
-</Steps>
+## API 一览
 
-## 准备
-
-```bash
-export AISA_BASE=https://api.aisa.one/apis/v1/connector
-export AISA_API_KEY=sk-...   # 不要把 key 写进代码仓库
-```
-
-- **鉴权。** 每个请求带 `Authorization: Bearer $AISA_API_KEY`，也可以用 `x-api-key: $AISA_API_KEY`。MCP 或 CLI 登录得到的 OAuth access token 同样可用，和 social 等走 MCP 的接口一致。创建、限额和轮换 key 见[身份验证](/zh/guides/authentication)。
-- **用 API Key 时只在服务端调用。** 不要把 API Key 放进浏览器或移动端应用。用 OAuth 登录的 MCP 客户端不需要 key。
-- **可用性。** 如果 AIsa Connect 的所有路径都返回 `404` 和 `{"error":"api endpoint not found"}`，说明 AIsa Connect 在这个环境暂时不可用，请联系 [developer@aisa.one](mailto:developer@aisa.one)。
-
-## 终端用户ID
-
-`externalUserId` 是终端用户在**你的系统里**的 ID，AIsa 用它区分你的不同终端用户。
-
-- **格式：** 1–250 个可打印 ASCII 字符，首尾不能有空格。建议用稳定、不含个人信息的 ID，例如 `store_8812`，不要用邮箱。
-- **何时必填：** 发起连接和执行动作时必填。查询连接列表时可选，用来过滤。
-- **隔离：** 连接归属于你的 AIsa 账户**和**某一个 `externalUserId`。A 用户执行动作时，AIsa 不会用 B 用户的连接。
-
-<Warning>
-`GET /connections/{connectionId}` 和 `DELETE /connections/{connectionId}` 只校验连接属于**你的 AIsa 账户**，不校验终端用户。请在你的后端保存“连接属于哪个终端用户”的对应关系，不要让终端用户自己传入任意连接 ID。
-</Warning>
-
-## 浏览应用和动作
-
-浏览目录免费。
-
-```bash
-# 应用列表：q 按名称、别名、分类搜索；limit 取 1–200，默认 50
-curl -s "$AISA_BASE/apps?q=shopify&limit=20" \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-```json
-{
-  "data": [
-    {
-      "key": "shopify",
-      "name": "Shopify",
-      "description": "...",
-      "aliases": ["..."],
-      "categories": [{ "id": "...", "name": "..." }],
-      "authTypes": ["api_key", "oauth2"],
-      "credentialFields": {
-        "api_key": [
-          { "key": "apiKey", "label": "Admin API access token", "required": true, "secret": true },
-          { "key": "shopDomain", "label": "Shop domain", "required": true, "secret": false }
-        ]
-      },
-      "iconUrl": null,
-      "homepageUrl": "...",
-      "documentationUrl": "..."
-    }
-  ]
-}
-```
-
-```bash
-# 某个应用的动作：q 按 key、名称、描述过滤
-curl -s "$AISA_BASE/apps/shopify/actions?q=order" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  | jq '.data[] | {key, name, operationType}'
-
-# 单个动作，查看输入 schema。动作 key 以列表返回的为准。
-curl -s "$AISA_BASE/actions/shopify.get_shop" \
-  -H "Authorization: Bearer $AISA_API_KEY" | jq '.inputSchema'
-```
-
-动作的字段有 `key`、`app`、`name`、`description`、`operationType`（`read`、`write` 或 `destructive`）、`requiredScopes`、`inputSchema` 和 `outputSchema`。
-
-应用的 `authTypes` 决定连接方式：
-
-| `authTypes` 取值 | 连接方式 |
-| --- | --- |
-| `api_key`、`custom_credential` | [用凭证连接](#用凭证连接) |
-| `oauth2` | [托管授权连接](#托管授权连接) |
-
-`credentialFields` 按连接方式列出凭证字段。每个字段有 `key`（请求里用的字段名）、`label`（可以直接作为表单标签）、`required`、`secret`（是否按密码输入框处理）。`api_key` 的第一个字段永远是 `apiKey`。某种连接方式不在 `credentialFields` 里，说明 AIsa 不掌握它的字段，提交后由应用自己校验。只支持 OAuth 的应用是 `credentialFields: {}`。
-
-## 用凭证连接
-
-Shopify、WooCommerce 等大多数电商应用用凭证连接。按应用 `credentialFields` 里列出的字段，在你的界面里让终端用户填写，再放进 `credentials` 转交给 AIsa。`apiKey` 也可以单独写在顶层，等同于 `credentials.apiKey`。
-
-<CodeGroup>
-
-```bash Shopify (api_key)
-curl -s -X POST "$AISA_BASE/connect/shopify/credentials" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "externalUserId": "store_8812",
-    "apiKey": "<ADMIN_API_ACCESS_TOKEN>",
-    "credentials": { "shopDomain": "acme.myshopify.com" }
-  }'
-```
-
-```bash WooCommerce (custom_credential)
-curl -s -X POST "$AISA_BASE/connect/woocommerce/credentials" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "externalUserId": "store_8812",
-    "credentials": {
-      "storeUrl": "https://shop.example.com",
-      "consumerKey": "ck_...",
-      "consumerSecret": "cs_..."
-    }
-  }'
-```
-
-</CodeGroup>
-
-- **Shopify**：`apiKey` 是店铺的 Admin API access token（`shpat_…`），`shopDomain` 是店铺的 myshopify.com 域名，例如 `acme.myshopify.com`；也接受同一店铺的 Shopify 后台 URL。
-- **WooCommerce**：`storeUrl`（https 店铺地址）、`consumerKey`、`consumerSecret` 必填；`wordpressUsername`、`wordpressApplicationPassword` 可选，部分 WordPress 接口需要。
-- **只要一个 key 的应用**（例如 OpenAI）只传 `"apiKey": "..."` 即可。
-
-连接成功后返回新建的连接：
-
-```json
-{
-  "id": "con_...",
-  "app": "shopify",
-  "externalUserId": "store_8812",
-  "status": "active",
-  "scopes": [],
-  "connectedAt": "2026-11-12T08:00:00Z",
-  "updatedAt": "2026-11-12T08:00:00Z"
-}
-```
-
-### 凭证如何校验
-
-1. **AIsa 先按应用的 `credentialFields` 检查字段。** 缺少必填字段、或者传了应用不接受的字段，返回 `400 invalid_request`。`param` 指出问题字段（`apiKey` 或 `credentials`），`message` 列出这个应用接受的全部字段，例如 `credential shopDomain is required; the app takes apiKey, shopDomain (required)`。这一步不会发给应用，也不会创建任何东西。
-2. **字段齐全后，应用校验凭证本身。** token 不对、店铺域名不是 myshopify.com 域名、WooCommerce 地址不是 https 等，返回 `400 connect_failed`。请让用户核对填写的内容。
-
-其他规则：
-
-- `apiKey` 只能传一次：放在顶层**或** `credentials` 里，不能两处都有。完全不传凭证也是 `400 invalid_request`。
-- 请求体里有多余字段，返回 `400 invalid_request`。
-- 应用不在目录里返回 `404 not_found`。应用只支持 OAuth 时返回 `400 invalid_request`，`param` 是 `app`，请改用[托管授权连接](#托管授权连接)。
-- AIsa 不存储、不记录、也不回传你提交的凭证，错误信息里也不会出现凭证的值。
-
-## 托管授权连接
-
-`oauth2` 类应用的授权页由 AIsa 托管。为终端用户发起一次连接会话：
-
-```bash
-curl -s -G "$AISA_BASE/connect/github" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  --data-urlencode "externalUserId=store_8812" \
-  --data-urlencode "redirectUrl=https://app.example.com/aisa/done"   # 可选
-```
-
-```json
-{
-  "connectUrl": "https://.../connect/cs_...#<secret>",
-  "connectSessionId": "cs_...",
-  "expiresAt": "..."
-}
-```
-
-<Steps>
-  <Step title="打开完整的 connectUrl">
-    在终端用户的浏览器里打开**完整的** `connectUrl`。`#` 后面是这次会话的密钥，不能截掉，也不要写进日志。会话 30 分钟后过期。
-  </Step>
-  <Step title="用户在应用里授权">
-    流程结束后，浏览器跳到 `redirectUrl`，并带上 `?connectSessionId=cs_...&connectionId=con_...`；失败时再带 `&error=<code>`。`redirectUrl` 必须是 https，并且在你账户的跳转白名单里。要把 URL 前缀加进白名单，发给 [developer@aisa.one](mailto:developer@aisa.one) 即可。不传 `redirectUrl` 时，用户会停在 AIsa 的结果页。
-  </Step>
-  <Step title="在服务端轮询会话">
-    以会话状态为准。每 2–3 秒查一次，直到 `state` 是 `completed`、`failed` 或 `expired`：
-
-    ```bash
-    curl -s "$AISA_BASE/connect/sessions/cs_..." \
-      -H "Authorization: Bearer $AISA_API_KEY"
-    ```
-
-    ```json
-    { "id": "cs_...", "app": "github", "state": "completed", "connectionId": "con_...", "expiresAt": "..." }
-    ```
-
-    失败的会话多一个 `"error": {"code": "connect_denied", "message": "...", "isUserFixable": true}`。
-  </Step>
-</Steps>
-
-会话的 `state` 有 `created`、`authorizing`、`completed`、`failed` 和 `expired`。
-
-| 结果 | `state` | `error.code` |
-| --- | --- | --- |
-| 连接成功 | `completed` | 无；`connectionId` 有值 |
-| 用户没有同意授权 | `failed` | `connect_denied` |
-| 重新授权时用户登录了另一个账号 | `failed` | `connect_account_mismatch` |
-| 连接没有完成 | `failed` | `connect_failed` |
-| 你的账户有效连接数已达上限 | `failed` | `user_quota_exceeded` |
-| 应用的授权窗口（约 10 分钟）或 30 分钟的会话到期 | `expired` | `connect_expired` |
-
-AIsa 会先向应用核实授权确实完成，再创建连接。跳转带回的参数不会被直接采信，所以你不需要把它们转发给 AIsa。如果用户回到托管页时应用还没记录授权完成，托管页会自动重查约 10 秒；如果用户没完成授权就返回，托管页会把他重新带回应用的授权页。
-
-**重新授权。** 连接需要重新连接时，加上 `connectionId=con_...` 再发起一次会话，会在原连接上原地更新。
-
-## 管理连接
-
-查看和删除连接免费。
-
-```bash
-# 两个过滤参数都可选；按创建时间倒序
-curl -s -G "$AISA_BASE/connections" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  --data-urlencode "externalUserId=store_8812" \
-  --data-urlencode "app=shopify"
-
-curl -s "$AISA_BASE/connections/con_..." \
-  -H "Authorization: Bearer $AISA_API_KEY"
-
-curl -s -X DELETE "$AISA_BASE/connections/con_..." \
-  -H "Authorization: Bearer $AISA_API_KEY"
-```
-
-删除后返回该连接，`"status": "disconnected"`；之后再查询返回 `404 not_found`。
-
-| `status` | 含义 |
-| --- | --- |
-| `active` | 连接可用。 |
-| `needs_reconnect` | 应用不再接受这个授权，需要用户[重新连接](#托管授权连接)。 |
-| `disconnected` | 已删除，不再出现在列表里。 |
-
-一个 AIsa 账户默认最多有 **100 个有效连接**，这是你所有终端用户合计的数量。超出后发起连接返回 `403 user_quota_exceeded`。请删除不用的连接，或联系我们提高上限。
-
-## 执行动作
-
-```bash
-curl -s -i -X POST "$AISA_BASE/actions/run" \
-  -H "Authorization: Bearer $AISA_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"actionKey": "shopify.get_shop", "externalUserId": "store_8812", "input": {}}'
-```
-
-```http
-HTTP/1.1 200 OK
-X-AISA-Customer-Cost-Micros-USD: 300
-
-{"runId": "run_...", "connectionId": "con_...", "output": {...}}
-```
-
-- **用哪个连接。** `connectionId` 可选。不传时，AIsa 使用该终端用户在这个应用下最新的 `active` 连接，响应会告诉你用的是哪个连接。
-- **输入校验。** `input` 会先按动作的 `inputSchema` 校验，再发给应用。不合格返回 `422 validation_failed`，`error.details.errors` 里逐条列出 `path` 和 `message`。schema 里没有声明的字段一律拒绝。
-- **不自动重试。** 每次执行只发给应用一次，AIsa 不会替你重试。
-- **执行 ID。** 执行发出之后才出现的错误，`error.details.runId` 里带本次执行的 ID，联系我们时请附上。
-
-<Warning>
-谨慎对待 `write` 和 `destructive` 动作。执行前先看 `operationType`，会修改终端用户数据的动作要先和用户确认。写操作遇到 `app_error` 或 `outcome_unknown` 时，改动可能已经生效：先到应用里确认结果，再决定要不要重试，避免重复写入。
-</Warning>
-
-## 计费
-
-- 只有**执行成功**的动作收费，每次 **USD 0.0003**（300 micro-USD）。所有套餐同一价格，不叠加套餐倍率。
-- 失败一律不收费，包括校验失败、没有连接、需要重新连接、被限流、应用报错和结果未知。
-- 浏览目录、发起连接、查看和删除连接都免费。
-- 每次执行的实际扣费在响应头 `X-AISA-Customer-Cost-Micros-USD` 里，单位是 micro-USD（1 USD = 1,000,000 micro-USD）。
-- 执行发出前，AIsa 会预留一次执行的费用。余额不足时返回 `402`，动作不会发出。
-
-`402` 的响应体和[其他错误](#错误码)不同：
-
-```json
-{ "error": { "code": "insufficient_wallet_balance", "message": "...", "retryable": false } }
-```
-
-如果 API Key 设置了消费限额并且已经用完，`code` 是 `insufficient_api_key_balance`。充值或调整 key 的限额见[计费与额度](/zh/guides/pricing)。
-
-## 限流
-
-按 API Key 限流：
-
-| 请求类型 | 上限 |
-| --- | --- |
-| 读请求（目录、会话、连接） | 每分钟 300 次 |
-| 写请求（执行动作、发起连接、删除连接） | 每分钟 60 次 |
-
-超限时 AIsa 返回 `429 rate_limited`，并带 `Retry-After` 响应头。应用自己也可能限流，这时错误的 `attribution` 是 `"upstream"`；应用给了等待时间时，会原样放在 `Retry-After` 和 `error.details.retryAfterSeconds` 里。被限流的请求不收费。
-
-## 错误码
-
-除了服务不可用时的 `404` 和上面的 `402`，所有错误都是这个格式：
-
-```json
-{
-  "error": {
-    "code": "connection_required",
-    "message": "...",
-    "type": "invalid_request_error",
-    "param": null,
-    "retryable": false,
-    "retryHint": "never",
-    "attribution": "user",
-    "details": {}
-  }
-}
-```
-
-`attribution` 表示问题出在哪一方：`user` 是请求或终端用户的连接，`upstream` 是应用本身，`aisa` 是 AIsa。请按 `code` 处理，不要按 `message` 文案判断。
-
-| HTTP | `code` | 含义 | 怎么办 |
-| --- | --- | --- | --- |
-| 404 | 无，`{"error":"api endpoint not found"}` | AIsa Connect 在这个环境暂时不可用（任何路径都这样） | 联系我们 |
-| 401 | `unauthorized` | API Key 或 OAuth access token 缺失或无效 | 检查凭证 |
-| 400 | `invalid_request` | 参数或请求体不合法：多余字段、`externalUserId` 格式不对、凭证为空或 `apiKey` 重复、缺少应用要求的凭证字段（例如 Shopify 的 `shopDomain`）或传了应用不接受的字段、应用只支持 OAuth、连接属于别的应用、`redirectUrl` 不在白名单 | 根据 `param` 和 `message` 修正；凭证字段以 `GET /apps` 的 `credentialFields` 为准 |
-| 422 | `validation_failed` | `input` 不符合 `inputSchema`，或者应用拒绝了输入 | 按 `details.errors` 和 schema 修正 |
-| 404 | `not_found` | 应用、动作、连接或会话不存在（含已删除的连接、其他终端用户的连接） | 检查 key 或 ID |
-| 400 | `connect_failed` | 应用拒绝了凭证（token 无效、店铺域名或地址不对等），或者连接没有完成 | 让用户核对凭证后重试 |
-| （会话结果） | `connect_denied`、`connect_expired`、`connect_account_mismatch` | 托管 OAuth 的结果，只出现在会话的 `error.code` 和 `redirectUrl` 的 `error` 参数里：用户没同意授权、授权链接过期（`state` 为 `expired`）、重新授权时换了账号 | 让用户重新发起连接 |
-| 409 | `connection_required` | 该终端用户还没有连接这个应用 | 先[连接](#用凭证连接) |
-| 409 | `reconnect_required` | 连接已失效（`needs_reconnect`） | 让用户重新连接，并删除旧连接 |
-| 403 | `user_quota_exceeded` | 有效连接数已达上限（默认 100） | 删除不用的连接，或联系我们提额 |
-| 429 | `rate_limited` | AIsa 按 key 限流，或者应用限流（`attribution: upstream`）；发起连接、执行动作、浏览目录和删除连接时都可能出现 | 按 `Retry-After` 稍后重试；不收费 |
-| 402 | `insufficient_wallet_balance`、`insufficient_api_key_balance` | 余额或 key 的消费限额不够执行一次 | 充值，或调整 key 的限额 |
-| 502 | `app_error` | 应用执行失败，写操作可能已经生效；不收费 | 先确认再重试 |
-| 502 | `outcome_unknown` | 结果未知；不收费 | 先确认再重试 |
-| 503 | `connect_unavailable` | 暂时不可用，包括这个应用还没在 AIsa 开通，或者执行动作的计费尚未开通（`message` 会写明） | 稍后重试；持续出现请联系我们 |
-| 500 | `internal_error` | AIsa 内部错误 | 稍后重试；持续出现请带上时间和 `runId` 联系我们 |
-
-联系 [developer@aisa.one](mailto:developer@aisa.one) 时，请附上大致的 UTC 时间、请求方法和路径、HTTP 状态、错误 `code`，有 `runId` 时一并附上。不要附带 API Key、终端用户的凭证或 `connectUrl` 里的密钥。
-
-## API 参考
-
-路径都相对于 `https://api.aisa.one/apis/v1/connector`。
+路径都相对于 `https://api.aisa.one/apis/v1/connector`。鉴权用 `Authorization: Bearer YOUR_AISA_API_KEY`（或 `x-api-key`），也可以用 MCP 或 CLI 的 OAuth 登录。
 
 | 端点 | 参考 | 费用 |
 | --- | --- | --- |
@@ -380,13 +79,32 @@ X-AISA-Customer-Cost-Micros-USD: 300
 | `DELETE /connections/{connectionId}` | [删除连接](/zh/api-reference/aisa-connector/delete_aisa_connector_apis_v1_connector_connectio_b41217) | 免费 |
 | `POST /actions/run` | [执行动作](/zh/api-reference/aisa-connector/post_aisa_connector_apis_v1_connector_actions_run) | 仅执行成功时收费 |
 
-## 相关文档
+## 暂不支持的功能
+
+AIsa Connect 覆盖本组文档里介绍的流程。以下功能目前**还不支持**：
+
+- **触发器和 webhook。** 应用里发生了什么、连接会话什么时候结束，AIsa 都不会主动通知你。请轮询会话。
+- **使用你自己的 OAuth 应用。** 托管 OAuth 始终使用 AIsa 注册的应用，不能换成你自己的 client ID，也不能给授权同意页换品牌。
+- **自定义托管授权页的品牌。**
+- **按动作分配权限。** 可以把 key 限制为 Connect 只读（见[核心概念](/zh/resources/aisa-connect/concepts#权限范围)），但不能限制到具体应用或动作。
+- **团队共享。** 连接归属于 API Key 所在的 AIsa 账户，没有单独的共享机制。
+- **Google 应用的写权限。** 生产环境里 Google 应用以只读权限连接。见[安全与数据处理](/zh/resources/aisa-connect/security#应用权限)。
+
+需要其中某项功能，请告诉我们：[developer@aisa.one](mailto:developer@aisa.one)。
+
+## 下一步
 
 <CardGroup cols={2}>
-  <Card title="计费与额度" icon="credit-card" href="/zh/guides/pricing">
-    余额、充值和 key 消费限额如何运作。
+  <Card title="快速开始" icon="rocket" href="/zh/resources/aisa-connect/quickstart">
+    大约五分钟，连接一个测试账号并执行第一个动作。
   </Card>
-  <Card title="身份验证" icon="lock" href="/zh/guides/authentication">
-    创建、限额、保存和轮换 API Key。
+  <Card title="在智能体中使用" icon="robot" href="/zh/resources/aisa-connect/agents">
+    在 MCP 客户端里调用 Connect，或把动作变成 OpenAI、Anthropic、Vercel AI SDK 和 LangChain 的工具。
+  </Card>
+  <Card title="为终端用户授权" icon="user-check" href="/zh/resources/aisa-connect/authorize-users">
+    托管 OAuth 授权页、凭证类应用和重新连接。
+  </Card>
+  <Card title="价格与限制" icon="credit-card" href="/zh/resources/aisa-connect/pricing-and-limits">
+    哪些操作收费、连接数上限和限流。
   </Card>
 </CardGroup>

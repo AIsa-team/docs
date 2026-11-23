@@ -1,0 +1,100 @@
+---
+title: "AIsa Connect errors & troubleshooting"
+sidebarTitle: "Errors & troubleshooting"
+icon: "triangle-exclamation"
+description: "The AIsa Connect error shape, every error code with what to do about it, and fixes for common problems."
+---
+
+## Error shape
+
+Apart from the unavailable-service `404` and the reservation `402` below, every error has this shape:
+
+```json
+{
+  "error": {
+    "message": "the end user has no connection of shopify",
+    "type": "invalid_request_error",
+    "code": "connection_required",
+    "param": null,
+    "retryable": false,
+    "retryHint": "never"
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `code` | The error code. Handle errors by `code`, not by the text of `message` |
+| `message` | A short explanation for developers; it never contains credential values |
+| `type` | A broad class: `invalid_request_error`, `authentication_error`, `permission_error`, `not_found`, `rate_limit_error`, `platform_error` (the app) or `api_error` (AIsa) |
+| `param` | The parameter or header at fault, such as `externalUserId`, `input` or `Idempotency-Key`; `null` when there is none |
+| `details` | Extra data, only when there is some: `errors` for validation failures, `runId` for runs that were sent, `retryAfterSeconds` for app rate limits, `requiredScope` for scope errors |
+| `retryable` | Whether repeating the same request later can succeed |
+| `retryHint` | How to retry: `never`, `after_delay`, `after_reconnect` (the end user must reconnect first) or `reconcile_first` (check the result in the app first) |
+
+Two responses use other bodies:
+
+- If every AIsa Connect path returns `404` with `{"error":"api endpoint not found"}`, AIsa Connect is temporarily unavailable in that environment. Contact [developer@aisa.one](mailto:developer@aisa.one).
+- A `402` from the run's balance reservation has the body `{ "error": { "code": "insufficient_wallet_balance", "message": "...", "retryable": false } }`, or `insufficient_api_key_balance`. See [Balance checks](/resources/aisa-connect/pricing-and-limits#balance-checks).
+
+## Error codes
+
+| HTTP | `code` | Meaning | What to do |
+| --- | --- | --- | --- |
+| 404 | none: `{"error":"api endpoint not found"}` | AIsa Connect is temporarily unavailable in this environment (every path answers this way) | Contact us |
+| 401 | `unauthorized` | The API key or OAuth access token is missing or invalid | Check the credential |
+| 403 | `insufficient_scope` | The key lacks the scope this operation needs; `details.requiredScope` names it | Use a key with that scope. See [Scopes](/resources/aisa-connect/concepts#scopes) |
+| 400 | `invalid_request` | Invalid parameters or body: unknown fields, a bad `externalUserId`, `limit` or app key, empty credentials or `apiKey` sent twice, a missing credential field or one the app does not take, an OAuth-only app, a connection that belongs to another app, a `redirectUrl` not on the allowlist, or an account that lacks the permission an action needs | Fix it using `param` and `message` |
+| 422 | `validation_failed` | `input` does not match `inputSchema`, or the app rejected the input | Fix it using `details.errors` and the schema |
+| 404 | `not_found` | The app, action, connection or session does not exist, including deleted connections and connections of other end users, or the app found nothing for the run's `input` | Check the key or ID |
+| 400 | `connect_failed` | The app rejected the credentials (invalid token, wrong shop domain or store address), or the connection did not complete | Ask the user to check the credentials and try again |
+| (session result) | `connect_denied`, `connect_expired`, `connect_account_mismatch` | Hosted OAuth results, only in the session's `error.code` and the `error` parameter on `redirectUrl`: the user did not grant access, the app's authorization link expired, or the user signed in to a different account while reauthorizing. A session that ran out of its 30 minutes has `state: expired` and `error.code: connect_failed` | Ask the user to connect again |
+| 409 | `connection_required` | The end user has not connected this app, or the app reports that the account no longer exists | [Connect](/resources/aisa-connect/authorize-users) first |
+| 409 | `reconnect_required` | The connection is `needs_reconnect`, or the app no longer accepts it | Ask the user to [reconnect](/resources/aisa-connect/authorize-users#reconnect-a-connection) |
+| 409 | `idempotency_conflict` | The `Idempotency-Key` was used for another request, or the first run with it is still in progress | Use a new key for a new request; otherwise retry shortly |
+| 403 | `user_quota_exceeded` | Your account reached its active connection limit (100 by default) | Delete unused connections, or contact us to raise the limit |
+| 429 | `rate_limited` | AIsa's per-key limit, or the app's own limit. Can happen when connecting, running actions, browsing the catalog or deleting connections | Retry after `Retry-After`; not charged |
+| 402 | `insufficient_balance` | The account balance is zero, or the key's spending limit is used up (checked before runs and credential connects) | Top up, or adjust the key's limit |
+| 402 | `insufficient_wallet_balance`, `insufficient_api_key_balance` | The balance or the key's spending limit cannot cover one run | Top up, or adjust the key's limit |
+| 502 | `app_error` | The app failed to run the action. A write may already have taken effect. Not charged | Check in the app before retrying |
+| 502 | `outcome_unknown` | The result is unknown. Not charged | Check in the app before retrying |
+| 503 | `connect_unavailable` | Temporarily unavailable, including an app or action that is not yet enabled on AIsa | Retry later; contact us if it persists |
+| 500 | `internal_error` | An error inside AIsa | Retry later; if it persists, contact us with the time and the `runId` |
+
+A request with a method a path does not support returns `405` with an `Allow` header.
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="The run returns 409 connection_required, but the user connected">
+    The run's `externalUserId` must match the connect call exactly, including case. List the end user's connections with `GET /connections?externalUserId=...` and check `app` and `status`. If the hosted session ended `failed` or `expired`, no connection was created.
+  </Accordion>
+  <Accordion title="The run returns 400 invalid_request: the app refused this action for the connected account">
+    The connected account does not have the permission the action needs. Google apps connect with read-only access in production, so their `write` and `destructive` actions fail this way. For other apps, check what the user granted, and reconnect with an account that has the access.
+  </Accordion>
+  <Accordion title="The hosted page says the link is incomplete or has expired">
+    The `connectUrl` lost the part after `#`, or the session is older than 30 minutes. Send the complete URL, and start a new session for each attempt.
+  </Accordion>
+  <Accordion title="The user lands on AIsa's result page instead of my app">
+    No `redirectUrl` was sent, or it was refused when the session started. Check that it is HTTPS and on your allowlist. See [Return to your app](/resources/aisa-connect/authorize-users#return-to-your-app).
+  </Accordion>
+  <Accordion title="redirectUrl is refused with 400 invalid_request">
+    It must be an absolute HTTPS URL without a fragment, and start with a prefix on your account's allowlist. Send the prefix to [developer@aisa.one](mailto:developer@aisa.one) to add it.
+  </Accordion>
+  <Accordion title="Credential connect returns 400 invalid_request with param credentials">
+    A required field is missing or a field name is not one the app takes. Check field names and spelling; see [Connect with credentials](/resources/aisa-connect/authorize-users#connect-with-credentials).
+  </Accordion>
+  <Accordion title="Credential connect returns 400 connect_failed">
+    The app rejected the values: a wrong token, a shop domain that is not a myshopify.com domain, or a WooCommerce address that is not HTTPS. Ask the user to check what they entered.
+  </Accordion>
+  <Accordion title="A write returned app_error or outcome_unknown">
+    The change may already have happened. Check the result in the app before you retry. Use an `Idempotency-Key` so a retry of the same request returns the stored answer instead of running again.
+  </Accordion>
+  <Accordion title="My MCP client gets 401 or 403">
+    `401` means the sign-in or key is missing or invalid: sign in again, or check the `Authorization` header. `403 insufficient_scope` means the token or key lacks a Connect scope. See [Use with agents](/resources/aisa-connect/agents).
+  </Accordion>
+</AccordionGroup>
+
+## Contact support
+
+When you contact [developer@aisa.one](mailto:developer@aisa.one), include the approximate UTC time, the method and path, the status, the error `code`, and the `runId` when there is one. Never include API keys, end user credentials or the `connectUrl` secret.

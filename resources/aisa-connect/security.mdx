@@ -1,0 +1,53 @@
+---
+title: "AIsa Connect security & data handling"
+sidebarTitle: "Security & data handling"
+icon: "shield-halved"
+description: "Where end user credentials live, what AIsa stores and logs, how end users are kept apart, and which app permissions AIsa Connect requests."
+---
+
+## Who holds what
+
+| Data | Where it lives |
+| --- | --- |
+| End users' OAuth tokens, API keys and other credentials | AIsa's app integration, the managed backend that calls the apps. Your system does not store them and cannot read them back |
+| Connection records: your account, `externalUserId`, app, status, granted scopes, timestamps | AIsa |
+| Your end user IDs and which connection belongs to whom in your product | Your backend |
+
+- AIsa does not store, log or return the credentials you send to `POST /connect/{app}/credentials`, and error messages never contain credential values.
+- No endpoint returns an end user's tokens or keys, including to you.
+- AIsa's request logs keep each request's metadata, such as time, operation, status and cost. They do not keep run inputs, run outputs or credentials.
+- When you send an `Idempotency-Key`, AIsa keeps that run's response for 24 hours so it can answer a retry. Without the header, no run response is kept.
+
+## Keep your side secure
+
+- **Server side only.** Call AIsa Connect with an API key only from your backend. Never put an API key in a browser or mobile app. MCP clients that sign in with OAuth do not need a key.
+- **Own the end user mapping.** `GET /connections/{connectionId}` and `DELETE /connections/{connectionId}` only check that the connection belongs to your AIsa account, not to the end user. Look up connection IDs in your backend from the signed-in user, and never accept an arbitrary connection ID from a client.
+- **Use opaque end user IDs.** `externalUserId` should be a stable ID without personal data, such as `store_8812`, not an email address.
+- **Forward credentials, do not keep them.** For credential-based apps, pass what the user enters straight to AIsa. Do not log request bodies that contain credentials.
+- **Protect the connect link.** The part of `connectUrl` after `#` is the session secret. Do not cut it off, log it or share it. Because it is a URL fragment, browsers do not send it to servers in requests or `Referer` headers; the hosted page sends it to AIsa in a request header.
+- **Limit keys.** Use separate keys per environment, set spending limits, and ask us for a read-only Connect key where writes are not needed. See [Scopes](/resources/aisa-connect/concepts#scopes) and [Authentication](/guides/authentication).
+- **Confirm writes.** Check `operationType`, and confirm with the end user before `write` and `destructive` actions.
+
+## End user isolation
+
+A connection belongs to your AIsa account **and** one `externalUserId`. When user A runs an action, AIsa never uses user B's connection, and one AIsa account can never see or use another account's connections.
+
+## Hosted OAuth safeguards
+
+- AIsa creates a connection only after it confirms with the app that authorization finished. Parameters on the redirect are not trusted on their own.
+- `redirectUrl` must be HTTPS and match a prefix on your account's allowlist, so a connect link cannot send your users to an arbitrary site.
+- When an end user reauthorizes and signs in to a different account than the one being reconnected, the session fails with `connect_account_mismatch`, and the connection is not used until the right account is reauthorized.
+- Connect sessions expire after 30 minutes.
+
+## App permissions
+
+AIsa decides which permissions it asks each app for during hosted OAuth. Two fields help you see what applies:
+
+- `requiredScopes` on an action lists the app permissions the action needs.
+- `scopes` on a connection lists the permissions the app reported for that authorization.
+
+The catalog lists every action an app offers, but a run can only do what the connected account granted. **Google apps connect with read-only access in production**, apart from managing Gmail labels: actions that send, create, change or delete data in Google apps are refused with `400 invalid_request` ("the app refused this action for the connected account"). For credential-based apps, the permissions of the key or token the end user creates decide what runs can do; for Shopify, that is the access granted to the Admin API access token.
+
+## Data you receive
+
+`output` on a run is the app's response for that action, shaped by `outputSchema`. Treat it as your end user's data: store only what your product needs, and apply your own retention rules.

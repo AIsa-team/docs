@@ -1,0 +1,100 @@
+---
+title: "AIsa Connect 错误与排查"
+sidebarTitle: "错误与排查"
+icon: "triangle-exclamation"
+description: "AIsa Connect 的错误格式、每个错误码的处理方法，以及常见问题的排查思路。"
+---
+
+## 错误格式
+
+除了服务不可用时的 `404` 和下文预留费用阶段的 `402`，所有错误都是这个格式：
+
+```json
+{
+  "error": {
+    "message": "the end user has no connection of shopify",
+    "type": "invalid_request_error",
+    "code": "connection_required",
+    "param": null,
+    "retryable": false,
+    "retryHint": "never"
+  }
+}
+```
+
+| 字段 | 含义 |
+| --- | --- |
+| `code` | 错误码。请按 `code` 处理，不要按 `message` 文案判断 |
+| `message` | 给开发者看的简短说明，不会包含凭证的值 |
+| `type` | 大类：`invalid_request_error`、`authentication_error`、`permission_error`、`not_found`、`rate_limit_error`、`platform_error`（应用侧）或 `api_error`（AIsa 侧） |
+| `param` | 出问题的参数或请求头，例如 `externalUserId`、`input` 或 `Idempotency-Key`；没有时为 `null` |
+| `details` | 附加信息，有内容时才出现：校验失败时的 `errors`、已发出执行的 `runId`、应用限流时的 `retryAfterSeconds`、权限范围错误时的 `requiredScope` |
+| `retryable` | 稍后重复同一个请求是否可能成功 |
+| `retryHint` | 怎么重试：`never`、`after_delay`、`after_reconnect`（终端用户先重新连接）或 `reconcile_first`（先到应用里确认结果） |
+
+有两种响应用的是别的格式：
+
+- 如果 AIsa Connect 的所有路径都返回 `404` 和 `{"error":"api endpoint not found"}`，说明 AIsa Connect 在这个环境暂时不可用，请联系 [developer@aisa.one](mailto:developer@aisa.one)。
+- 执行预留费用阶段的 `402`，响应体是 `{ "error": { "code": "insufficient_wallet_balance", "message": "...", "retryable": false } }`，或者 `insufficient_api_key_balance`。见[余额检查](/zh/resources/aisa-connect/pricing-and-limits#余额检查)。
+
+## 错误码
+
+| HTTP | `code` | 含义 | 怎么办 |
+| --- | --- | --- | --- |
+| 404 | 无，`{"error":"api endpoint not found"}` | AIsa Connect 在这个环境暂时不可用（任何路径都这样） | 联系我们 |
+| 401 | `unauthorized` | API Key 或 OAuth access token 缺失或无效 | 检查凭证 |
+| 403 | `insufficient_scope` | key 缺少这个操作需要的权限范围，`details.requiredScope` 写明缺哪个 | 换一个有该权限范围的 key。见[权限范围](/zh/resources/aisa-connect/concepts#权限范围) |
+| 400 | `invalid_request` | 参数或请求体不合法：多余字段、`externalUserId`、`limit` 或应用 key 不合法、凭证为空或 `apiKey` 重复、缺少应用要求的凭证字段或传了应用不接受的字段、应用只支持 OAuth、连接属于别的应用、`redirectUrl` 不在白名单，或者账号缺少动作需要的权限 | 根据 `param` 和 `message` 修正 |
+| 422 | `validation_failed` | `input` 不符合 `inputSchema`，或者应用拒绝了输入 | 按 `details.errors` 和 schema 修正 |
+| 404 | `not_found` | 应用、动作、连接或会话不存在（含已删除的连接、其他终端用户的连接），或者应用按执行的 `input` 什么也没找到 | 检查 key 或 ID |
+| 400 | `connect_failed` | 应用拒绝了凭证（token 无效、店铺域名或地址不对等），或者连接没有完成 | 让用户核对凭证后重试 |
+| （会话结果） | `connect_denied`、`connect_expired`、`connect_account_mismatch` | 托管 OAuth 的结果，只出现在会话的 `error.code` 和 `redirectUrl` 的 `error` 参数里：用户没同意授权、应用的授权链接过期、重新授权时换了账号。30 分钟会话到期的情况是 `state: expired`、`error.code: connect_failed` | 让用户重新发起连接 |
+| 409 | `connection_required` | 该终端用户还没有连接这个应用，或者应用报告该账号已不存在 | 先[连接](/zh/resources/aisa-connect/authorize-users) |
+| 409 | `reconnect_required` | 连接已失效（`needs_reconnect`），或应用不再接受它 | 让用户[重新连接](/zh/resources/aisa-connect/authorize-users#重新连接) |
+| 409 | `idempotency_conflict` | 这个 `Idempotency-Key` 已用于别的请求，或者用它发起的第一次执行还没结束 | 新请求换新 key；否则稍后重试 |
+| 403 | `user_quota_exceeded` | 有效连接数已达上限（默认 100） | 删除不用的连接，或联系我们提额 |
+| 429 | `rate_limited` | AIsa 按 key 限流，或者应用自己限流；发起连接、执行动作、浏览目录和删除连接时都可能出现 | 按 `Retry-After` 稍后重试；不收费 |
+| 402 | `insufficient_balance` | 账户余额为零，或者 key 的消费限额已用完（执行和凭证连接前检查） | 充值，或调整 key 的限额 |
+| 402 | `insufficient_wallet_balance`、`insufficient_api_key_balance` | 余额或 key 的消费限额不够执行一次 | 充值，或调整 key 的限额 |
+| 502 | `app_error` | 应用执行失败，写操作可能已经生效；不收费 | 先到应用里确认再重试 |
+| 502 | `outcome_unknown` | 结果未知；不收费 | 先到应用里确认再重试 |
+| 503 | `connect_unavailable` | 暂时不可用，包括应用或动作还没在 AIsa 开通 | 稍后重试；持续出现请联系我们 |
+| 500 | `internal_error` | AIsa 内部错误 | 稍后重试；持续出现请带上时间和 `runId` 联系我们 |
+
+用路径不支持的方法发请求，返回 `405`，并带 `Allow` 响应头。
+
+## 排查
+
+<AccordionGroup>
+  <Accordion title="执行返回 409 connection_required，但用户已经连接过">
+    执行时的 `externalUserId` 必须和连接时完全一致，包括大小写。用 `GET /connections?externalUserId=...` 列出该终端用户的连接，检查 `app` 和 `status`。如果托管会话以 `failed` 或 `expired` 结束，就没有创建连接。
+  </Accordion>
+  <Accordion title="执行返回 400 invalid_request：the app refused this action for the connected account">
+    已连接账号没有这个动作需要的权限。生产环境里 Google 应用以只读权限连接，它们的 `write` 和 `destructive` 动作都会这样失败。其他应用请检查用户授予的权限，换一个有相应权限的账号重新连接。
+  </Accordion>
+  <Accordion title="托管页提示链接不完整或已过期">
+    `connectUrl` 丢了 `#` 后面的部分，或者会话已超过 30 分钟。请发送完整的 URL，每次尝试都发起新会话。
+  </Accordion>
+  <Accordion title="用户停在了 AIsa 的结果页，没有回到我的应用">
+    没有传 `redirectUrl`，或者发起会话时它被拒绝了。检查它是不是 https、在不在白名单里。见[跳回你的应用](/zh/resources/aisa-connect/authorize-users#跳回你的应用)。
+  </Accordion>
+  <Accordion title="redirectUrl 被拒绝，返回 400 invalid_request">
+    它必须是不带片段的绝对 https URL，并以你账户白名单里的某个前缀开头。把前缀发给 [developer@aisa.one](mailto:developer@aisa.one) 加进白名单。
+  </Accordion>
+  <Accordion title="凭证连接返回 400 invalid_request，param 是 credentials">
+    缺少必填字段，或字段名不是应用接受的。检查字段名和拼写；见[用凭证连接](/zh/resources/aisa-connect/authorize-users#用凭证连接)。
+  </Accordion>
+  <Accordion title="凭证连接返回 400 connect_failed">
+    应用拒绝了填写的值：token 不对、店铺域名不是 myshopify.com 域名、WooCommerce 地址不是 https 等。请让用户核对填写的内容。
+  </Accordion>
+  <Accordion title="写操作返回 app_error 或 outcome_unknown">
+    改动可能已经生效。重试前先到应用里确认结果。带上 `Idempotency-Key`，同一请求的重试会拿到保存下来的响应，而不会再执行一次。
+  </Accordion>
+  <Accordion title="MCP 客户端返回 401 或 403">
+    `401` 表示登录状态或 key 缺失或无效：重新登录，或检查 `Authorization` 请求头。`403 insufficient_scope` 表示 token 或 key 缺少 Connect 权限范围。见[在智能体中使用](/zh/resources/aisa-connect/agents)。
+  </Accordion>
+</AccordionGroup>
+
+## 联系支持
+
+联系 [developer@aisa.one](mailto:developer@aisa.one) 时，请附上大致的 UTC 时间、请求方法和路径、HTTP 状态、错误 `code`，有 `runId` 时一并附上。不要附带 API Key、终端用户的凭证或 `connectUrl` 里的密钥。

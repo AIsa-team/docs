@@ -1,0 +1,313 @@
+---
+title: "在智能体中使用 AIsa Connect"
+sidebarTitle: "在智能体中使用"
+icon: "robot"
+description: "让 AI 智能体为你的用户查找并执行应用动作：通过 AIsa MCP 服务器，或者把动作的输入 schema 变成 OpenAI、Anthropic、Vercel AI SDK 和 LangChain 的工具。"
+---
+
+智能体可以通过两种方式使用 AIsa Connect：
+
+| | MCP 服务器 | 函数调用 |
+| --- | --- | --- |
+| 适合 | 在 Claude Code、Cursor、Codex、VS Code 等 MCP 客户端里运行的智能体 | 你自己用模型 SDK 或框架搭建的智能体 |
+| 登录方式 | 浏览器 OAuth，或在请求头里带 API Key | 你的 API Key，从你的后端调用 |
+| 模型看到的工具 | AIsa 的元工具，可以调用所有 Connect 操作 | 你挑选的动作，每个动作一个工具，由它的 `inputSchema` 生成 |
+
+两种方式用的是同一套 API、终端用户、连接和价格。
+
+## MCP
+
+### 连接你的客户端
+
+把客户端指向 `https://mcp.aisa.one/mcp`。授权方式是 OAuth：客户端会打开浏览器，你点一次允许即可。没有浏览器的客户端改为发送 `Authorization: Bearer YOUR_AISA_API_KEY`。各客户端的配置见[通过 MCP 连接](/zh/agent-quickstart)。
+
+```bash
+# Claude Code
+claude mcp add --transport http -s user aisa https://mcp.aisa.one/mcp
+
+# Codex
+codex mcp add aisa --url https://mcp.aisa.one/mcp
+```
+
+个人身份的 MCP 或 CLI 登录代表你的 AIsa 账户，所以智能体看到的连接和你的 API Key 看到的一样。执行动作同样要求余额大于零。
+
+### MCP 里的 Connect 操作
+
+MCP 服务器通过几个元工具调用所有接口：`search`、`list_categories`、`get_details` 和 `batch_quote` 免费，`batch_use` 负责真正执行调用。AIsa Connect 在其中表现为下面这些操作，ID 和 [API 参考](/zh/resources/aisa-connect#api-一览)一致：
+
+| 操作 | ID | 费用 |
+| --- | --- | --- |
+| 应用列表 | `get_aisa_connector_apis_v1_connector_apps` | 免费 |
+| 应用的动作列表 | `get_aisa_connector_apis_v1_connector_apps_app_actions` | 免费 |
+| 单个动作 | `get_aisa_connector_apis_v1_connector_actions_actionkey` | 免费 |
+| 发起托管授权 | `get_aisa_connector_apis_v1_connector_connect_app` | 免费 |
+| 用凭证连接 | `post_aisa_connector_apis_v1_connector_connect_app_0fbeef` | 免费 |
+| 查询连接会话 | `get_aisa_connector_apis_v1_connector_connect_sess_bfc4e5` | 免费 |
+| 连接列表 | `get_aisa_connector_apis_v1_connector_connections` | 免费 |
+| 查询连接 | `get_aisa_connector_apis_v1_connector_connections__b41217` | 免费 |
+| 删除连接 | `delete_aisa_connector_apis_v1_connector_connectio_b41217` | 免费 |
+| 执行动作 | `post_aisa_connector_apis_v1_connector_actions_run` | 每次成功执行 USD 0.0003 |
+
+工具名和参数请以 `search` 或 `get_details` 的返回为准，不要自己编。
+
+### 智能体怎么找到应用的动作
+
+`gmail.search_threads`、`google_search_console.query_search_analytics` 这类应用动作**不是**独立的 MCP 工具。`search` 找到的是上面这些 Connect 操作，而不是每个应用内部的动作。可靠的做法是：
+
+<Steps>
+  <Step title="列出应用的动作">
+    用应用 key（`gmail`、`google_search_console`、`shopify`……）调用 **应用的动作列表**，可选地用 `q` 按 key、名称或描述过滤。不知道应用 key 时，先用 `q` 调用 **应用列表**。
+  </Step>
+  <Step title="读动作的 schema">
+    列表里的每个动作都带 `inputSchema` 和 `operationType`。需要时再用 **单个动作** 查询某一个。
+  </Step>
+  <Step title="执行">
+    调用 **执行动作**，传入 `actionKey`、终端用户的 `externalUserId` 和符合 schema 的 `input`。和其他付费调用一样，先用 `batch_quote` 报价。
+  </Step>
+</Steps>
+
+一个好用的提示词：
+
+```text
+Use AIsa Connect. List the actions of the google_search_console app,
+pick the one that queries search analytics, read its input schema, then run it
+for end user console-user-12345 for property https://www.example.com/
+comparing the last 28 days with the 28 days before.
+```
+
+### 用哪个终端用户 ID
+
+- **你自己的账号。** 在[控制台](/zh/resources/aisa-connect/console)里连接。控制台以终端用户 `console-user-<你的用户 ID>` 连接它们；在应用页面复制这个 ID，交给智能体。
+- **你客户的账号。** 用你的后端给他们用的同一个 `externalUserId`。
+- **在智能体里发起连接。** 智能体可以调用 **发起托管授权**，把 `connectUrl` 给你。在浏览器里打开完整链接并授权，再让智能体轮询 **查询连接会话**。
+
+### AIsa CLI
+
+[AIsa CLI](/zh/get-started/cli) 也能调用同样的操作：`aisa search`，需要时 `aisa schema`，然后 `aisa quote`，最后用上面的操作 ID 执行 `aisa call`。用 `aisa login` 登录，CI 里则设置 `AISA_API_KEY`。
+
+## 函数调用
+
+自己搭建智能体时，把它需要的动作变成工具。每个动作本来就有输入的 JSON Schema，所以工具定义可以直接映射：
+
+| 动作字段 | 工具字段 |
+| --- | --- |
+| `key`（`gmail.search_threads`） | 工具名。把 `.` 换成 `__`，因为大多数模型 API 的工具名只允许字母、数字、`_` 和 `-` |
+| `description` | 工具描述 |
+| `inputSchema` | 工具参数 / 输入 schema |
+
+模型调用某个工具时，你的代码用动作 key、**你自己的**终端用户 ID，以及模型给出的参数（作为 `input`）调用 `POST /actions/run`，再把 `output`（或错误）还给模型。
+
+下面的示例把 Gmail 里匹配 `thread` 的只读动作交给模型，并用 AIsa 作为模型提供方，这样一个 AIsa Key 就能同时用模型和 AIsa Connect。换成其他模型提供方，做法完全一样。
+
+### 公共辅助函数（Python）
+
+```python
+import json
+import os
+
+import requests
+
+AISA_KEY = os.environ["AISA_API_KEY"]
+CONNECT = "https://api.aisa.one/apis/v1/connector"
+HEADERS = {"Authorization": f"Bearer {AISA_KEY}"}
+END_USER = "store_8812"  # from your signed-in user, never from the model
+
+
+def load_actions(app, q=None):
+    params = {"q": q} if q else {}
+    r = requests.get(f"{CONNECT}/apps/{app}/actions", headers=HEADERS, params=params, timeout=30)
+    r.raise_for_status()
+    return r.json()["data"]
+
+
+def tool_name(action_key):
+    return action_key.replace(".", "__")
+
+
+def object_schema(action):
+    schema = action.get("inputSchema") or {}
+    return schema if schema.get("type") == "object" else {"type": "object", "properties": {}}
+
+
+def run_action(action_key, args, idempotency_key=None):
+    headers = dict(HEADERS)
+    if idempotency_key:
+        headers["Idempotency-Key"] = idempotency_key
+    r = requests.post(
+        f"{CONNECT}/actions/run",
+        headers=headers,
+        json={"actionKey": action_key, "externalUserId": END_USER, "input": args},
+        timeout=120,
+    )
+    body = r.json()
+    if r.status_code != 200:
+        return json.dumps({"error": body.get("error")})  # let the model see what went wrong
+    return json.dumps(body["output"])
+
+
+actions = [a for a in load_actions("gmail", "thread") if a["operationType"] == "read"]
+by_name = {tool_name(a["key"]): a["key"] for a in actions}
+PROMPT = "Find emails about the launch this week and summarize the decisions."
+```
+
+### 模型 SDK
+
+<CodeGroup>
+
+```python OpenAI
+from openai import OpenAI
+
+client = OpenAI(api_key=AISA_KEY, base_url="https://api.aisa.one/v1")
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": tool_name(a["key"]),
+            "description": a["description"],
+            "parameters": object_schema(a),
+        },
+    }
+    for a in actions
+]
+
+messages = [{"role": "user", "content": PROMPT}]
+while True:
+    resp = client.chat.completions.create(model="gpt-5.4-mini", messages=messages, tools=tools)
+    msg = resp.choices[0].message
+    if not msg.tool_calls:
+        print(msg.content)
+        break
+    messages.append(msg)
+    for call in msg.tool_calls:
+        args = json.loads(call.function.arguments or "{}")
+        result = run_action(by_name[call.function.name], args, idempotency_key=call.id)
+        messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+```
+
+```python Anthropic
+import anthropic
+
+client = anthropic.Anthropic(api_key=AISA_KEY, base_url="https://api.aisa.one")
+tools = [
+    {"name": tool_name(a["key"]), "description": a["description"], "input_schema": object_schema(a)}
+    for a in actions
+]
+
+messages = [{"role": "user", "content": PROMPT}]
+while True:
+    resp = client.messages.create(
+        model="claude-haiku-4-5-20251001", max_tokens=2048, tools=tools, messages=messages
+    )
+    if resp.stop_reason != "tool_use":
+        print("".join(b.text for b in resp.content if b.type == "text"))
+        break
+    messages.append({"role": "assistant", "content": resp.content})
+    results = []
+    for block in resp.content:
+        if block.type == "tool_use":
+            output = run_action(by_name[block.name], block.input, idempotency_key=block.id)
+            results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
+    messages.append({"role": "user", "content": results})
+```
+
+```python LangChain
+from langchain_core.messages import HumanMessage
+from langchain_core.tools import StructuredTool
+from langchain_openai import ChatOpenAI
+
+
+def make_tool(action):
+    return StructuredTool.from_function(
+        func=lambda **kwargs: run_action(action["key"], kwargs),
+        name=tool_name(action["key"]),
+        description=action["description"],
+        args_schema=object_schema(action),
+    )
+
+
+tools = [make_tool(a) for a in actions]
+by_tool = {t.name: t for t in tools}
+llm = ChatOpenAI(model="gpt-5.4-mini", api_key=AISA_KEY, base_url="https://api.aisa.one/v1")
+llm_with_tools = llm.bind_tools(tools)
+
+messages = [HumanMessage(PROMPT)]
+while True:
+    ai = llm_with_tools.invoke(messages)
+    messages.append(ai)
+    if not ai.tool_calls:
+        print(ai.content)
+        break
+    for call in ai.tool_calls:
+        messages.append(by_tool[call["name"]].invoke(call))
+```
+
+</CodeGroup>
+
+### Vercel AI SDK（TypeScript）
+
+```typescript
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateText, jsonSchema, stepCountIs, tool } from "ai";
+
+const CONNECT = "https://api.aisa.one/apis/v1/connector";
+const HEADERS = { Authorization: `Bearer ${process.env.AISA_API_KEY}` };
+const END_USER = "store_8812"; // from your signed-in user, never from the model
+
+async function loadActions(app: string, q?: string): Promise<any[]> {
+  const qs = q ? `?${new URLSearchParams({ q })}` : "";
+  const res = await fetch(`${CONNECT}/apps/${app}/actions${qs}`, { headers: HEADERS });
+  if (!res.ok) throw new Error(await res.text());
+  return (await res.json()).data;
+}
+
+async function runAction(actionKey: string, input: unknown) {
+  const res = await fetch(`${CONNECT}/actions/run`, {
+    method: "POST",
+    headers: { ...HEADERS, "Content-Type": "application/json" },
+    body: JSON.stringify({ actionKey, externalUserId: END_USER, input }),
+  });
+  const body = await res.json();
+  return res.ok ? body.output : { error: body.error };
+}
+
+const actions = (await loadActions("gmail", "thread")).filter((a) => a.operationType === "read");
+const tools = Object.fromEntries(
+  actions.map((a) => [
+    a.key.replaceAll(".", "__"),
+    tool({
+      description: a.description,
+      inputSchema: jsonSchema(a.inputSchema?.type === "object" ? a.inputSchema : { type: "object", properties: {} }),
+      execute: (input) => runAction(a.key, input),
+    }),
+  ]),
+);
+
+const aisa = createOpenAI({ apiKey: process.env.AISA_API_KEY, baseURL: "https://api.aisa.one/v1" });
+const { text } = await generateText({
+  model: aisa.chat("gpt-5.4-mini"),
+  tools,
+  stopWhen: stepCountIs(5),
+  prompt: "Find emails about the launch this week and summarize the decisions.",
+});
+console.log(text);
+```
+
+### 目录很大时用通用工具
+
+光 Gmail 就有几十个动作，整个目录有一千多个应用。与其每个动作一个工具，不如给模型三个通用工具，和 MCP 服务器的思路一样：
+
+| 工具 | 调用 |
+| --- | --- |
+| `list_actions(app, q)` | `GET /apps/{app}/actions?q=...`，返回 `key`、`description`、`operationType` 和 `inputSchema` |
+| `get_action(actionKey)` | `GET /actions/{actionKey}` |
+| `run_action(actionKey, input)` | `POST /actions/run`，带上你的终端用户 ID |
+
+这样模型可以在运行时自己发现动作。校验仍然会兜底：`input` 不符合 schema 的执行会返回 `422 validation_failed` 并列出问题，模型可以据此修正。
+
+## 防护措施
+
+- **终端用户由你的代码决定。** `externalUserId` 取自已登录的用户，绝不从模型的参数里取，这样提示词就无法让智能体去操作别人的账号。
+- **先从 `read` 动作开始。** 只在确实需要时才开放 `write` 和 `destructive` 动作，并且在你的代码执行之前，让用户逐个批准。
+- **安全地重试写操作。** 带上 `Idempotency-Key`（例如工具调用 ID），重复调用会拿到第一次的响应，而不会执行两次。遇到 `app_error` 或 `outcome_unknown` 后，先到应用里确认再重试。
+- **处理重新连接。** 遇到 `409 reconnect_required` 或 `connection_required` 时，停下来请用户连接应用，而不是让模型反复重试。
+- **控制输出大小。** 有些动作返回的数据很大。上下文窗口紧张时，先裁剪 `output` 再交给模型。
