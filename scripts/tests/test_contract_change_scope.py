@@ -91,6 +91,7 @@ class ChangeScopeTests(unittest.TestCase):
         self.assertNotIn('origin/main:docs/publication/runtime-acquisition.json', '\n'.join(commands))
         check = next(step for step in steps if step.get('name') == 'Check actual candidate readiness')
         self.assertEqual(check['env']['REVIEWED_BASELINE'], '${{ vars.RUNTIME_CONTRACT_BASELINE_REF }}')
+        self.assertEqual(check['env']['GH_TOKEN'], '${{ github.token }}')
         self.assertIn('--facts-dir /tmp/runtime-contract-evidence', check['run'])
         self.assertIn('--baseline-ref "$REVIEWED_BASELINE"', check['run'])
         self.assertIn('--published-ref "$PUBLISHED_REF"', check['run'])

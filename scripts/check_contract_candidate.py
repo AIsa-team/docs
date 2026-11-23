@@ -196,95 +196,116 @@ def assess_candidate(root: Path, facts_dir: Path, baseline_ref: str | None = Non
     return report
 
 
+def assess_publication_candidate(root: Path, facts: Path, baseline_ref: str | None = None,
+                                 published_ref: str | None = None, source_receipts: Path | None = None):
+    """Use the verified Runtime mode without rewriting the proposed publication."""
+    receipt = None
+    if (facts / 'acquisition-receipt.json').exists() or (facts / 'contracts').exists():
+        from export_contract_publication import acquired_input, RUNTIME_KEYS
+        receipt, receipt_raw = acquired_input(facts)
+        if 'canonical_validation' in receipt:
+            from canonical_import import assess_canonical_candidate
+            from publication_origin import ORIGIN
+            from schema_input_bundle import REVIEWED_BASELINE, require
+            require(baseline_ref == REVIEWED_BASELINE, 'Canonical candidate requires the reviewed baseline')
+            require(re.fullmatch(r'[0-9a-f]{40}', published_ref or ''),
+                    'Canonical candidate requires a full independently selected published Git SHA')
+            previous = subprocess.check_output(
+                ['git', 'log', '-1', '--format=%H', published_ref, '--', ORIGIN], cwd=root, text=True).strip()
+            require(re.fullmatch(r'[0-9a-f]{40}', previous), 'No attributed previous formal publication')
+            return assess_canonical_candidate(root, root, root, facts, previous_ref=previous,
+                source_receipts=source_receipts or root / '.cache/source-reviews.json')
+    report = assess_candidate(root, facts, baseline_ref, published_ref)
+    if receipt is not None:
+        report['runtime_acquisition_sha256'] = hashlib.sha256(receipt_raw).hexdigest()
+        report['runtime'] = {key: receipt[key] for key in RUNTIME_KEYS}
+    from source_governance import source_report
+    receipt_path = source_receipts or root / '.cache/source-reviews.json'
+    saved = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
+    sources = source_report(root, saved.get('receipts', {}), attempts=saved.get('attempts', {}))
+    report['source_governance'] = sources
+    if sources['status'] != 'passed' and sources['sources']:
+        if report['status'] != 'failed':
+            report['status'] = sources['status']
+        report.setdefault('missing_inputs', []).append('current source-maintenance evidence')
+    from generate_payment_discovery import verify_payment_catalog
+    try:
+        report['payment_discovery'] = verify_payment_catalog(root)
+    except (ValueError, KeyError, TypeError, OSError) as exc:
+        report['status'] = 'failed'
+        report.setdefault('global_errors', []).append({'code': 'payment_discovery_mismatch', 'detail': str(exc)})
+    from publication_surface import validate_surfaces, publication_hashes
+    try:
+        report['publication_surfaces'] = validate_surfaces(root, published_ref)
+    except (ValueError, KeyError, TypeError, OSError) as exc:
+        report['status'] = 'failed'
+        report.setdefault('global_errors', []).append({'code': 'publication_surface_mismatch', 'detail': str(exc)})
+    aggregate_path = root / 'openapi.yaml'
+    if aggregate_path.exists():
+        import runtime_consolidate_openapi as consolidate
+        import yaml
+        previous_root = consolidate.OPENAPI_DIR
+        try:
+            consolidate.OPENAPI_DIR = str(root / 'openapi')
+            expected = consolidate.build_unified_spec()
+            consolidate.inject_x402_annotations(expected)
+            consolidate.remove_v2_path_mirrors(expected)
+        finally:
+            consolidate.OPENAPI_DIR = previous_root
+        raw = aggregate_path.read_bytes()
+        # The aggregate is about 100 MB; use PyYAML's equivalent safe C
+        # loader when available, matching the release gate.
+        actual_yaml = yaml.load(raw, Loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader))
+        try:
+            consolidate.validate_reference_closure(actual_yaml)
+        except (KeyError, TypeError, ValueError) as exc:
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'aggregate_unresolved_reference', 'detail': str(exc)})
+        # Python equality treats True as 1; wire schema declarations must
+        # retain JSON scalar types as well as exact numeric values.
+        if json.dumps(actual_yaml, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'aggregate_recomposition_mismatch'})
+        index_path = root / 'llms.txt'
+        if not index_path.is_file() or consolidate.discovery_index_block(raw) not in index_path.read_text():
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'llms_index_provenance_mismatch'})
+        json_path = root / 'openapi/openapi.json'
+        if not json_path.is_file() or json.dumps(json.loads(json_path.read_text()), sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'aggregate_json_recomposition_mismatch'})
+        from sales_catalog_projection import verify_sales_catalog
+        try:
+            verify_sales_catalog(root, expected, raw)
+        except ValueError as exc:
+            report['status'] = 'failed'
+            report.setdefault('global_errors', []).append({'code': 'sales_catalog_projection_mismatch', 'detail': str(exc)})
+        report['publication_artifact'] = {'openapi_sha256': hashlib.sha256(raw).hexdigest(),
+            'assessment_scope': 'formal producer artifact declarations and source maintenance; no execution',
+            'source_hashes': {name: row['source_hash'] for name, row in sources['sources'].items()},
+            'source_metadata': {name: {key: json.loads((root / 'openapi/upstream' / name).read_text())['info']['x-aisa-source'][key]
+                for key in ('content_hash', 'policy_revision', 'refresh_policy')} for name in sources['sources']},
+            'files_sha256': publication_hashes(root),
+            'baseline_ref': baseline_ref, 'published_ref': published_ref}
+    else:
+        if report['status'] != 'failed':
+            report['status'] = 'not_assessed'
+        report.setdefault('missing_inputs', []).append('consolidated publication artifact')
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--facts-dir', type=Path, help='Public runtime evidence restored from the existing contract cache')
     parser.add_argument('--baseline-ref', help='Independently reviewed Git SHA; absence grants no pending exemptions')
-    parser.add_argument('--published-ref', help='PR base or independently selected previous publication Git SHA used only to verify retained contents')
+    parser.add_argument('--published-ref', help='PR base or independently selected previous publication Git SHA used to authenticate publication history')
     parser.add_argument('--report', type=Path)
     parser.add_argument('--source-receipts', type=Path, help='Attributed source-maintenance receipts; defaults to workflow cache')
     args = parser.parse_args()
     try:
-        report = assess_candidate(args.root, args.facts_dir or args.root / '.cache/runtime-contracts', args.baseline_ref, args.published_ref)
-        facts = args.facts_dir or args.root / '.cache/runtime-contracts'
-        if (facts / 'acquisition-receipt.json').exists():
-            from export_contract_publication import acquired_input, RUNTIME_KEYS
-            receipt, receipt_raw = acquired_input(facts)
-            report['runtime_acquisition_sha256'] = hashlib.sha256(receipt_raw).hexdigest()
-            report['runtime'] = {key: receipt[key] for key in RUNTIME_KEYS}
-        from source_governance import source_report
-        receipt_path = args.source_receipts or args.root / '.cache/source-reviews.json'
-        saved = json.loads(receipt_path.read_text()) if receipt_path.exists() else {}
-        sources = source_report(args.root, saved.get('receipts', {}), attempts=saved.get('attempts', {}))
-        report['source_governance'] = sources
-        if sources['status'] != 'passed' and sources['sources']:
-            if report['status'] != 'failed':
-                report['status'] = sources['status']
-            report.setdefault('missing_inputs', []).append('current source-maintenance evidence')
-        from generate_payment_discovery import verify_payment_catalog
-        try:
-            report['payment_discovery'] = verify_payment_catalog(args.root)
-        except (ValueError, KeyError, TypeError, OSError) as exc:
-            report['status'] = 'failed'
-            report.setdefault('global_errors', []).append({'code': 'payment_discovery_mismatch', 'detail': str(exc)})
-        from publication_surface import validate_surfaces, publication_hashes
-        try:
-            report['publication_surfaces'] = validate_surfaces(args.root, args.published_ref)
-        except (ValueError, KeyError, TypeError, OSError) as exc:
-            report['status'] = 'failed'
-            report.setdefault('global_errors', []).append({'code': 'publication_surface_mismatch', 'detail': str(exc)})
-        aggregate_path = args.root / 'openapi.yaml'
-        if aggregate_path.exists():
-            import runtime_consolidate_openapi as consolidate
-            import yaml
-            previous_root = consolidate.OPENAPI_DIR
-            try:
-                consolidate.OPENAPI_DIR = str(args.root / 'openapi')
-                expected = consolidate.build_unified_spec()
-                consolidate.inject_x402_annotations(expected)
-                consolidate.remove_v2_path_mirrors(expected)
-            finally:
-                consolidate.OPENAPI_DIR = previous_root
-            raw = aggregate_path.read_bytes()
-            # The aggregate is about 100 MB; use PyYAML's equivalent safe C
-            # loader when available, matching the release gate.
-            actual_yaml = yaml.load(raw, Loader=getattr(yaml, 'CSafeLoader', yaml.SafeLoader))
-            try:
-                consolidate.validate_reference_closure(actual_yaml)
-            except (KeyError, TypeError, ValueError) as exc:
-                report['status'] = 'failed'
-                report.setdefault('global_errors', []).append({'code': 'aggregate_unresolved_reference', 'detail': str(exc)})
-            # Python equality treats True as 1; wire schema declarations must
-            # retain JSON scalar types as well as exact numeric values.
-            if json.dumps(actual_yaml, sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
-                report['status'] = 'failed'
-                report.setdefault('global_errors', []).append({'code': 'aggregate_recomposition_mismatch'})
-            index_path = args.root / 'llms.txt'
-            if not index_path.is_file() or consolidate.discovery_index_block(raw) not in index_path.read_text():
-                report['status'] = 'failed'
-                report.setdefault('global_errors', []).append({'code': 'llms_index_provenance_mismatch'})
-            json_path = args.root / 'openapi/openapi.json'
-            if not json_path.is_file() or json.dumps(json.loads(json_path.read_text()), sort_keys=True, allow_nan=False) != json.dumps(expected, sort_keys=True, allow_nan=False):
-                report['status'] = 'failed'
-                report.setdefault('global_errors', []).append({'code': 'aggregate_json_recomposition_mismatch'})
-            from sales_catalog_projection import verify_sales_catalog
-            try:
-                verify_sales_catalog(args.root, expected, raw)
-            except ValueError as exc:
-                report['status'] = 'failed'
-                report.setdefault('global_errors', []).append({'code': 'sales_catalog_projection_mismatch', 'detail': str(exc)})
-            report['publication_artifact'] = {'openapi_sha256': hashlib.sha256(raw).hexdigest(),
-                'assessment_scope': 'formal producer artifact declarations and source maintenance; no execution',
-                'source_hashes': {name: row['source_hash'] for name, row in sources['sources'].items()},
-                'source_metadata': {name: {key: json.loads((args.root / 'openapi/upstream' / name).read_text())['info']['x-aisa-source'][key]
-                    for key in ('content_hash', 'policy_revision', 'refresh_policy')} for name in sources['sources']},
-                'files_sha256': publication_hashes(args.root),
-                'baseline_ref': args.baseline_ref, 'published_ref': args.published_ref}
-        else:
-            if report['status'] != 'failed':
-                report['status'] = 'not_assessed'
-            report.setdefault('missing_inputs', []).append('consolidated publication artifact')
+        report = assess_publication_candidate(args.root, args.facts_dir or args.root / '.cache/runtime-contracts',
+            args.baseline_ref, args.published_ref, args.source_receipts)
     except Exception as exc:
         report = {'schema_version': 1, 'status': 'not_assessed', 'global_errors': [],
                   'missing_inputs': ['candidate evaluation failed'], 'error': str(exc)}
