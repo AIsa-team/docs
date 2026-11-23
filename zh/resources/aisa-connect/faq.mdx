@@ -1,0 +1,56 @@
+---
+title: "AIsa Connect 常见问题"
+sidebarTitle: "常见问题"
+icon: "circle-question"
+description: "关于 AIsa Connect 的常见问题：开通方式、应用、终端用户、权限、测试，以及暂不支持的功能。"
+---
+
+<AccordionGroup>
+  <Accordion title="需要单独注册或购买套餐吗？">
+    不需要。所有 AIsa 账户都可以直接使用 AIsa Connect，用的就是现有的 API Key 和余额。见[价格与限制](/zh/resources/aisa-connect/pricing-and-limits)。
+  </Accordion>
+  <Accordion title="我的用户可以连接哪些应用？">
+    用 `GET /apps`、[aisa.one/catalog/connectors](https://aisa.one/catalog/connectors) 或[控制台](/zh/resources/aisa-connect/console)查看实时目录。不需要用户账号的应用，以及 AIsa 通过自有 [Unified API](/zh/resources/unified-apis) 提供的平台，不在 Connect 目录里。想申请接入某个应用，在控制台点 **申请接入应用**，或写信到 [developer@aisa.one](mailto:developer@aisa.one)。
+  </Accordion>
+  <Accordion title="可以从浏览器或移动端应用调用 AIsa Connect 吗？">
+    带 API Key 不行。请从你的后端调用，只把托管会话的 `connectUrl` 发给终端用户。用 OAuth 登录的 MCP 客户端不需要 key。
+  </Accordion>
+  <Accordion title="没有真实用户，怎么测试？">
+    在[控制台](/zh/resources/aisa-connect/console)连接你自己的账号，或者选一个测试用的 `externalUserId`（例如 `test_user_1`），按[快速开始](/zh/resources/aisa-connect/quickstart)走一遍。测试连接也计入连接数上限，用完请删除。
+  </Accordion>
+  <Accordion title="一个终端用户能连接同一个应用的两个账号吗？">
+    不带 `connectionId` 再次连接同一个应用，可能会为同一个终端用户新增一个连接。不传 `connectionId` 的执行会使用这个应用下最新的 `active` 连接；传 `connectionId` 可以指定某一个。如果只是想刷新已有连接，请带 `connectionId` [重新连接](/zh/resources/aisa-connect/authorize-users#重新连接)。
+  </Accordion>
+  <Accordion title="用户在应用里撤销了授权会怎样？">
+    应用报告这个连接的授权已失效时，执行返回 `409 reconnect_required`，连接变成 `needs_reconnect`，请让用户重新连接。如果应用只是拒绝这个账号执行某一个动作，执行会返回 `400 invalid_request`，连接仍是 `active`。AIsa 不在后台检查连接，所以要到下一次执行才会知道变化。
+  </Accordion>
+  <Accordion title="能拿到终端用户的 token，自己去调用应用吗？">
+    不能。没有任何接口会返回终端用户的令牌或密钥，也没有可以透传任意应用 API 调用的接口。请使用应用的动作。
+  </Accordion>
+  <Accordion title="能用我自己的 OAuth 应用，或者给托管页换品牌吗？">
+    暂时不能。托管 OAuth 使用 AIsa 注册的应用和 AIsa 的托管页。
+  </Accordion>
+  <Accordion title="有触发器或 webhook 吗？">
+    暂时没有。应用里发生的事件、连接会话结束，AIsa 都不会通知你。连接结果请轮询 `GET /connect/sessions/{sessionId}`。
+  </Accordion>
+  <Accordion title="能把智能体限制为只执行只读动作吗？">
+    可以，有三种方式：只把 `operationType` 为 `read` 的动作交给模型；找我们申请只有 Connect 只读权限（`connector:read`）的 API Key；另外，生产环境里 Google 应用本来就以只读权限连接。见[防护措施](/zh/resources/aisa-connect/agents#防护措施)。
+  </Accordion>
+  <Accordion title="为什么写操作返回 400 invalid_request？">
+    提示 "the app refused this action for the connected account"，说明账号缺少这个动作需要的权限。生产环境的 Google 应用是只读的；其他应用请检查用户授予的权限，或者他们 key 的权限。
+  </Accordion>
+  <Accordion title="团队成员能共享连接吗？">
+    连接归属于 API Key 所在的 AIsa 账户。这个账户的每个 key，以及以这个账户身份的 OAuth 登录，看到的都是同一批连接。目前还没有按成员或按连接分配的权限。
+  </Accordion>
+  <Accordion title="AIsa 会重试失败的执行吗？">
+    不会。每次执行只发给应用一次。要安全重试，请带上 `Idempotency-Key`；见[重试和幂等](/zh/resources/aisa-connect/actions#重试和幂等)。
+  </Accordion>
+  <Accordion title="有分页吗？">
+    Connect API 本身没有分页：列表一次返回全部结果，`GET /apps` 的 `limit` 最大 5000。会分页读取应用数据的动作，在 `inputSchema` 里有自己的分页字段。
+  </Accordion>
+  <Accordion title="一个连接能用多久？">
+    连接会一直保持 `active`，直到你删除它，或者应用不再接受它的授权；那时它会变成 `needs_reconnect`。
+  </Accordion>
+</AccordionGroup>
+
+还有问题？见[错误与排查](/zh/resources/aisa-connect/errors)，或写信到 [developer@aisa.one](mailto:developer@aisa.one)。

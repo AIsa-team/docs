@@ -1,0 +1,61 @@
+---
+title: "AIsa Connect pricing & limits"
+sidebarTitle: "Pricing & limits"
+icon: "credit-card"
+description: "What AIsa Connect charges for, how the balance checks work, the active connection limit and the per-key rate limits."
+---
+
+## What is charged
+
+- Only **successful** runs are charged, at **USD 0.0003 per run** (300 micro-USD). The price is the same on every plan; no plan multiplier applies.
+- Failed runs are never charged. That includes validation failures, missing connections, connections that need reconnecting, rate limiting, app errors and unknown outcomes.
+- Browsing the catalog, connecting, and reading or deleting connections are free.
+- Each run reports what it cost in the `X-AISA-Customer-Cost-Micros-USD` response header, in micro-USD (1 USD = 1,000,000 micro-USD).
+- A retry answered from an earlier run's stored result (`Idempotent-Replayed: true`) is not charged again. See [Retries and idempotency](/resources/aisa-connect/actions#retries-and-idempotency).
+
+Runs are paid from the same balance as your models and data APIs. See [Billing & Credits](/guides/pricing) for top-ups and key spending limits.
+
+| Operation | Charge |
+| --- | --- |
+| `GET /apps`, `GET /apps/{app}/actions`, `GET /actions/{actionKey}` | Free |
+| `GET /connect/{app}`, `GET /connect/sessions/{sessionId}`, `POST /connect/{app}/credentials` | Free |
+| `GET /connections`, `GET /connections/{connectionId}`, `DELETE /connections/{connectionId}` | Free |
+| `POST /actions/run` | USD 0.0003 per successful run |
+
+## Balance checks
+
+Before a run is sent, AIsa checks your balance twice:
+
+1. **Balance gate.** Your account balance must be above zero, and the API key's spending limit, if it has one, must not be used up. Otherwise the request fails with `402 insufficient_balance` in the [standard error shape](/resources/aisa-connect/errors#error-shape), with the message "the account balance or this key's budget is exhausted". The same gate applies to `POST /connect/{app}/credentials`, because the app checks the credentials, even though connecting is free.
+2. **Reservation.** AIsa reserves the cost of one run. If the balance is too low, the request fails with `402` and the action is not sent.
+
+A `402` from the reservation has a different body from the [other errors](/resources/aisa-connect/errors):
+
+```json
+{ "error": { "code": "insufficient_wallet_balance", "message": "...", "retryable": false } }
+```
+
+If the API key has a spending limit and that limit is used up, `code` is `insufficient_api_key_balance`. Top up or adjust the key's limit as described in [Billing & Credits](/guides/pricing).
+
+## Connection limit
+
+By default an AIsa account can have **100 active connections**, counted across all of your end users. Connections with status `needs_reconnect` count too; deleted ones do not. Beyond that, connecting returns `403 user_quota_exceeded`, and a hosted session ends `failed` with the same code. Delete connections you no longer use, or contact [developer@aisa.one](mailto:developer@aisa.one) to raise the limit.
+
+Reconnecting an existing connection with `connectionId` does not count as a new connection.
+
+## Rate limits
+
+Limits apply per API key:
+
+| Requests | Limit |
+| --- | --- |
+| Reads (catalog, sessions, connections) | 300 per minute |
+| Writes (running actions, starting connections, deleting connections) | 60 per minute |
+
+- Every response carries `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` (seconds until the limit resets) for the key's read or write limit.
+- Over the limit, AIsa returns `429 rate_limited` with a `Retry-After` header. Rate-limited requests are not charged.
+- Writes also share an account-wide limit across all of your keys, and an overall service limit. Heavy bursts can get `429` before one key reaches 60 per minute.
+- An app can also rate limit a request. Then the run returns `429 rate_limited`, and the app's wait time, when it gives one, is passed on in `Retry-After` and in `error.details.retryAfterSeconds`.
+- MCP and CLI clients signed in with OAuth get the same limits.
+
+To spread load, poll connect sessions every 2–3 seconds rather than continuously, and cache the catalog: apps and actions change rarely.

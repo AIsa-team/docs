@@ -1,0 +1,56 @@
+---
+title: "AIsa Connect FAQ"
+sidebarTitle: "FAQ"
+icon: "circle-question"
+description: "Answers to common questions about AIsa Connect: availability, apps, end users, permissions, testing and what is not supported yet."
+---
+
+<AccordionGroup>
+  <Accordion title="Do I need a separate sign-up or plan?">
+    No. All AIsa accounts can use AIsa Connect with their existing API key and balance. See [Pricing & limits](/resources/aisa-connect/pricing-and-limits).
+  </Accordion>
+  <Accordion title="Which apps can my users connect?">
+    Browse the live catalog with `GET /apps`, at [aisa.one/catalog/connectors](https://aisa.one/catalog/connectors), or in the [Console](/resources/aisa-connect/console). Apps that need no user account, and platforms AIsa serves through its own [Unified APIs](/resources/unified-apis), are not in the Connect catalog. To ask for an app, use **Request an app** in the Console or write to [developer@aisa.one](mailto:developer@aisa.one).
+  </Accordion>
+  <Accordion title="Can I call AIsa Connect from a browser or mobile app?">
+    Not with an API key. Call it from your backend, and send end users only the `connectUrl` of a hosted session. MCP clients that sign in with OAuth do not need a key.
+  </Accordion>
+  <Accordion title="How do I test without real users?">
+    Connect your own accounts in the [Console](/resources/aisa-connect/console), or pick a test `externalUserId` such as `test_user_1` and follow the [Quickstart](/resources/aisa-connect/quickstart). Test connections count toward your connection limit, so delete them when you are done.
+  </Accordion>
+  <Accordion title="Can one end user connect two accounts of the same app?">
+    Connecting an app again without `connectionId` can add another connection for the same end user. Runs without `connectionId` use the newest `active` connection for the app; pass `connectionId` to pick a specific one. To refresh an existing connection instead, [reconnect](/resources/aisa-connect/authorize-users#reconnect-a-connection) it with `connectionId`.
+  </Accordion>
+  <Accordion title="What happens when a user revokes access inside the app?">
+    When the app reports that the connection's authorization no longer works, the run fails with `409 reconnect_required` and the connection becomes `needs_reconnect`. Ask the user to reconnect. If the app only refuses that one action for the account, the run returns `400 invalid_request` instead and the connection stays `active`. AIsa does not check connections in the background, so it learns about the change on the next run.
+  </Accordion>
+  <Accordion title="Can I get the end user's token and call the app myself?">
+    No. No endpoint returns an end user's tokens or keys, and there is no pass-through endpoint for arbitrary app API calls. Use the app's actions.
+  </Accordion>
+  <Accordion title="Can I use my own OAuth app or brand the hosted page?">
+    Not yet. Hosted OAuth uses AIsa's app registrations and AIsa's hosted page.
+  </Accordion>
+  <Accordion title="Are there triggers or webhooks?">
+    Not yet. AIsa does not notify you about events in apps or about finished connect sessions. Poll `GET /connect/sessions/{sessionId}` for connect results.
+  </Accordion>
+  <Accordion title="Can I limit an agent to read-only actions?">
+    Yes, in three ways: expose only actions whose `operationType` is `read` to the model; ask us for an API key limited to read-only Connect access (`connector:read`); and note that Google apps already connect with read-only access in production. See [Guardrails](/resources/aisa-connect/agents#guardrails).
+  </Accordion>
+  <Accordion title="Why does a write action fail with 400 invalid_request?">
+    The message "the app refused this action for the connected account" means the account lacks the permission the action needs. Google apps are read-only in production; for other apps, check the access the user granted or the permissions of their key.
+  </Accordion>
+  <Accordion title="Can my team share connections?">
+    Connections belong to the AIsa account that owns the API key. Every key of that account, and an OAuth sign-in as that account, sees the same connections. There are no per-member or per-connection permissions yet.
+  </Accordion>
+  <Accordion title="Does AIsa retry failed runs?">
+    No. Each run is sent to the app once. To retry safely, send an `Idempotency-Key`; see [Retries and idempotency](/resources/aisa-connect/actions#retries-and-idempotency).
+  </Accordion>
+  <Accordion title="Is there pagination?">
+    The Connect API itself has none: lists return everything in one response, and `GET /apps` takes `limit` up to 5000. Actions that page through app data have their own page fields in `inputSchema`.
+  </Accordion>
+  <Accordion title="How long does a connection last?">
+    A connection stays `active` until you delete it, or until the app stops accepting its authorization, at which point it becomes `needs_reconnect`.
+  </Accordion>
+</AccordionGroup>
+
+Still stuck? See [Errors & troubleshooting](/resources/aisa-connect/errors), or write to [developer@aisa.one](mailto:developer@aisa.one).

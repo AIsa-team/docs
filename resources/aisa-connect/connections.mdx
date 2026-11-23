@@ -1,0 +1,105 @@
+---
+title: "Managing connections"
+sidebarTitle: "Managing connections"
+icon: "plug"
+description: "List, read and delete your end users' AIsa Connect connections, understand connection statuses, and handle reconnects and the connection limit."
+---
+
+A connection is one app account that one end user connected. Listing, reading and deleting connections is free.
+
+Examples on this page use `AISA_BASE=https://api.aisa.one/apis/v1/connector` and your key in `AISA_API_KEY`, as set up in the [Quickstart](/resources/aisa-connect/quickstart#before-you-start).
+
+## List connections
+
+```bash
+# Both filters are optional; newest first
+curl -s -G "$AISA_BASE/connections" \
+  -H "Authorization: Bearer $AISA_API_KEY" \
+  --data-urlencode "externalUserId=store_8812" \
+  --data-urlencode "app=shopify"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "con_...",
+      "app": "shopify",
+      "externalUserId": "store_8812",
+      "status": "active",
+      "scopes": [],
+      "connectedAt": "2026-11-12T08:00:00Z",
+      "updatedAt": "2026-11-12T08:00:00Z"
+    }
+  ]
+}
+```
+
+- Without filters, the list has every connection of your AIsa account, across all end users.
+- `externalUserId` is matched exactly, including case.
+- Deleted (`disconnected`) connections are not listed.
+- The list is not paginated: it returns all matching connections in one response.
+
+## Read one connection
+
+```bash
+curl -s "$AISA_BASE/connections/con_..." \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+<Warning>
+`GET /connections/{connectionId}` and `DELETE /connections/{connectionId}` only check that the connection belongs to **your AIsa account**. They do not check the end user. Keep the mapping from connection to end user in your backend, and never let an end user pass in an arbitrary connection ID.
+</Warning>
+
+## Delete a connection
+
+```bash
+curl -s -X DELETE "$AISA_BASE/connections/con_..." \
+  -H "Authorization: Bearer $AISA_API_KEY"
+```
+
+Deleting returns the connection with `"status": "disconnected"`. After that, reading it returns `404 not_found`, and deleting it again also returns `404 not_found`.
+
+Deleting removes the authorized account from AIsa's app integration, so AIsa can no longer act with it. A run that names the deleted connection in `connectionId` returns `404 not_found`. A run without `connectionId` uses another `active` connection of that end user for the app, or fails with `409 connection_required` when there is none.
+
+## Connection status
+
+| `status` | Meaning |
+| --- | --- |
+| `active` | The connection works. |
+| `needs_reconnect` | The app no longer accepts this authorization. Ask the user to [reconnect](/resources/aisa-connect/authorize-users#reconnect-a-connection). |
+| `disconnected` | Deleted. It no longer appears in lists. |
+
+A connection becomes `needs_reconnect` when the app refuses its authorization during a run (the run fails with `409 reconnect_required`), or when the user signs in to a different account while reconnecting. If the app reports that the account no longer exists, AIsa marks the connection `disconnected` and the run fails with `409 connection_required`.
+
+AIsa updates a connection's status only when it uses the connection: during a run, a reconnect or a delete. There is no background check, so `GET /connections/{connectionId}` shows the last known status. To confirm that a connection still works, run a `read` action with it.
+
+## Reconnect
+
+Reconnect `oauth2` connections through the hosted page with `connectionId`, so the connection keeps its ID. See [Reconnect a connection](/resources/aisa-connect/authorize-users#reconnect-a-connection).
+
+For credential-based apps, connect again with new credentials, then delete the old connection.
+
+## Several end users and several connections
+
+- Each end user's connections are separate. A run for one `externalUserId` never uses another end user's connection.
+- One end user can connect many apps, each with its own connection.
+- If an end user has more than one connection to the same app, a run without `connectionId` uses the newest `active` one. Pass `connectionId` to choose.
+- Connecting an app again without `connectionId` can add another connection instead of replacing the old one. Delete connections you no longer need.
+
+## Connection limit
+
+By default an AIsa account can have **100 active connections**, counted across all of your end users. Beyond that, connecting returns `403 user_quota_exceeded`. Delete connections you no longer use, or contact us to raise the limit. Connections in `needs_reconnect` count toward the limit until you delete them.
+
+## Keep your own records
+
+Store at least these fields in your backend for each connection:
+
+| Field | Why |
+| --- | --- |
+| Your end user ID | To list and run with the same `externalUserId` |
+| `id` (`con_…`) | To pass `connectionId`, reconnect, or delete |
+| `app` | To show the user which app is connected |
+| `status` | To prompt for a reconnect |
+
+AIsa holds the app tokens and credentials; you never need to store them.

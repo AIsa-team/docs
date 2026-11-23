@@ -1,0 +1,53 @@
+---
+title: "AIsa Connect 安全与数据处理"
+sidebarTitle: "安全与数据处理"
+icon: "shield-halved"
+description: "终端用户的凭证保存在哪里、AIsa 存储和记录哪些数据、终端用户之间如何隔离，以及 AIsa Connect 申请哪些应用权限。"
+---
+
+## 谁保管什么
+
+| 数据 | 保存在哪里 |
+| --- | --- |
+| 终端用户的 OAuth 令牌、API Key 和其他凭证 | AIsa 的应用集成，也就是负责调用各个应用的托管后端。你的系统不用存，也读不到 |
+| 连接记录：你的账户、`externalUserId`、应用、状态、授予的权限、时间戳 | AIsa |
+| 你的终端用户 ID，以及你产品里哪个连接属于谁 | 你的后端 |
+
+- AIsa 不存储、不记录、也不回传你提交给 `POST /connect/{app}/credentials` 的凭证，错误信息里也不会出现凭证的值。
+- 没有任何接口会返回终端用户的令牌或密钥，对你也一样。
+- AIsa 的请求日志只保留每个请求的元数据，例如时间、操作、状态和费用，不保留执行的输入、输出或凭证。
+- 如果你带了 `Idempotency-Key`，AIsa 会把这次执行的响应保留 24 小时，用来应答重试。不带这个请求头时，不保留执行响应。
+
+## 做好你这一侧的安全
+
+- **只在服务端调用。** 带 API Key 调用 AIsa Connect 只能在你的后端进行，不要把 API Key 放进浏览器或移动端应用。用 OAuth 登录的 MCP 客户端不需要 key。
+- **由你掌握终端用户的对应关系。** `GET /connections/{connectionId}` 和 `DELETE /connections/{connectionId}` 只校验连接属于你的 AIsa 账户，不校验终端用户。请根据已登录的用户在你的后端查出连接 ID，绝不接受客户端传来的任意连接 ID。
+- **用不透明的终端用户 ID。** `externalUserId` 应该是稳定、不含个人信息的 ID，例如 `store_8812`，不要用邮箱。
+- **凭证只转交，不保存。** 对凭证类应用，把用户填写的内容直接转给 AIsa。不要记录包含凭证的请求体。
+- **保护连接链接。** `connectUrl` 里 `#` 后面的部分是会话密钥，不要截掉、记录或分享。它是 URL 片段，浏览器不会在请求或 `Referer` 头里把它发给服务器；托管页通过请求头把它发给 AIsa。
+- **限制 key 的权限。** 不同环境用不同的 key，设置消费限额；不需要写操作的场景，可以找我们申请 Connect 只读 key。见[权限范围](/zh/resources/aisa-connect/concepts#权限范围)和[身份验证](/zh/guides/authentication)。
+- **写操作先确认。** 检查 `operationType`，执行 `write` 和 `destructive` 动作前先和终端用户确认。
+
+## 终端用户隔离
+
+连接归属于你的 AIsa 账户**和**某一个 `externalUserId`。A 用户执行动作时，AIsa 不会用 B 用户的连接；一个 AIsa 账户也永远看不到、用不了另一个账户的连接。
+
+## 托管 OAuth 的防护
+
+- AIsa 先向应用核实授权确实完成，才会创建连接。跳转带回的参数不会被直接采信。
+- `redirectUrl` 必须是 https，并匹配你账户白名单里的前缀，所以连接链接不能把你的用户带到任意网站。
+- 终端用户重新授权时如果登录了另一个账号，会话以 `connect_account_mismatch` 失败，在重新授权正确的账号之前，这个连接不会被使用。
+- 连接会话 30 分钟后过期。
+
+## 应用权限
+
+托管 OAuth 时向每个应用申请哪些权限，由 AIsa 决定。有两个字段可以帮你了解实际情况：
+
+- 动作的 `requiredScopes` 列出这个动作需要的应用权限。
+- 连接的 `scopes` 列出应用为这次授权报告的权限。
+
+目录会列出应用提供的全部动作，但一次执行只能做已连接账号授权范围内的事。**生产环境里 Google 应用以只读权限连接**（管理 Gmail 标签除外）：在 Google 应用里发送、创建、修改或删除数据的动作，都会被拒绝并返回 `400 invalid_request`（"the app refused this action for the connected account"）。凭证类应用能做什么，取决于终端用户创建的 key 或 token 的权限；以 Shopify 为例，就是 Admin API access token 被授予的访问权限。
+
+## 你收到的数据
+
+执行返回的 `output` 是应用对这个动作的响应，结构见 `outputSchema`。请把它当作终端用户的数据对待：只保存产品需要的部分，并执行你自己的数据保留策略。

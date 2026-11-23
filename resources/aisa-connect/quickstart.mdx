@@ -1,0 +1,238 @@
+---
+title: "AIsa Connect quickstart"
+sidebarTitle: "Quickstart"
+icon: "rocket"
+description: "Connect a Google Search Console account for a test end user through the hosted page, then run your first action. About five minutes."
+---
+
+This quickstart connects **one end user's** Google Search Console account through the AIsa hosted page and runs a read-only action with it. You play both roles: the developer who calls the API, and the end user who authorizes in the browser.
+
+You need:
+
+- An AIsa API key from [Console → API Keys](https://console.aisa.one/api-keys), and a positive balance. Every step is free except the final run, which costs USD 0.0003 when it succeeds.
+- A Google account that can see at least one Search Console property. Any other `oauth2` app works the same way; only the app key and the action change.
+- `curl` and `jq`, or Python 3 with `requests`, or Node.js 18 or later.
+
+<Note>
+Prefer to click through it first? Open [console.aisa.one/apps](https://console.aisa.one/apps), pick an app and choose **Connect account**. See [Console guide](/resources/aisa-connect/console).
+</Note>
+
+## Before you start
+
+```bash
+export AISA_BASE=https://api.aisa.one/apis/v1/connector
+export AISA_API_KEY=YOUR_AISA_API_KEY   # keep the key out of your code repository
+export END_USER=quickstart_user_1        # your own ID for the end user
+```
+
+Call AIsa Connect from your backend. Never put an API key in a browser or mobile app.
+
+## Run through it
+
+<Steps>
+  <Step title="Find the app">
+    Search the catalog. `q` matches app keys, names, aliases and categories.
+
+    ```bash
+    curl -s -G "$AISA_BASE/apps" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      --data-urlencode "q=search console" \
+      | jq '.data[] | {key, name, authTypes}'
+    ```
+
+    ```json
+    { "key": "google_search_console", "name": "Google Search Console", "authTypes": ["oauth2"] }
+    ```
+
+    `authTypes` is `oauth2`, so the end user connects through the hosted page.
+  </Step>
+  <Step title="Pick an action and read its schema">
+    ```bash
+    curl -s "$AISA_BASE/apps/google_search_console/actions" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      | jq '.data[] | {key, operationType}'
+
+    curl -s "$AISA_BASE/actions/google_search_console.list_sites" \
+      -H "Authorization: Bearer $AISA_API_KEY" | jq '.inputSchema'
+    ```
+
+    `google_search_console.list_sites` is a `read` action that lists the properties the connected Google account can see. Check `required` in its `inputSchema`; this quickstart sends `{}` as the input.
+  </Step>
+  <Step title="Start a hosted connect session">
+    ```bash
+    curl -s -G "$AISA_BASE/connect/google_search_console" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      --data-urlencode "externalUserId=$END_USER"
+    ```
+
+    ```json
+    {
+      "connectUrl": "https://.../connect/cs_...#<secret>",
+      "connectSessionId": "cs_...",
+      "expiresAt": "..."
+    }
+    ```
+
+    The session is valid for 30 minutes. Without `redirectUrl`, the end user ends on AIsa's result page, which is all a quickstart needs.
+  </Step>
+  <Step title="Authorize as the end user">
+    Open the **complete** `connectUrl` in a browser, including the part after `#`. Sign in to Google and allow access. The page shows **App account connected** when it is done.
+  </Step>
+  <Step title="Confirm the connection">
+    Poll the session from your server until `state` is `completed`, `failed` or `expired`:
+
+    ```bash
+    curl -s "$AISA_BASE/connect/sessions/cs_..." \
+      -H "Authorization: Bearer $AISA_API_KEY"
+    ```
+
+    ```json
+    { "id": "cs_...", "app": "google_search_console", "state": "completed", "connectionId": "con_...", "expiresAt": "..." }
+    ```
+  </Step>
+  <Step title="Run the action">
+    ```bash
+    curl -s -i -X POST "$AISA_BASE/actions/run" \
+      -H "Authorization: Bearer $AISA_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d "{\"actionKey\": \"google_search_console.list_sites\", \"externalUserId\": \"$END_USER\", \"input\": {}}"
+    ```
+
+    ```http
+    HTTP/1.1 200 OK
+    X-AISA-Customer-Cost-Micros-USD: 300
+
+    {"runId": "run_...", "connectionId": "con_...", "output": {...}}
+    ```
+
+    `output` is what the app returned, shaped by the action's `outputSchema`. The header shows the charge in micro-USD: 300 is USD 0.0003.
+  </Step>
+</Steps>
+
+## The same flow in code
+
+Both scripts do steps 3 to 6: start a session, print the link, wait for the connection, then run the action.
+
+<CodeGroup>
+
+```python Python
+import os
+import time
+
+import requests
+
+BASE = "https://api.aisa.one/apis/v1/connector"
+HEADERS = {"Authorization": f"Bearer {os.environ['AISA_API_KEY']}"}
+END_USER = "quickstart_user_1"
+APP = "google_search_console"
+ACTION = "google_search_console.list_sites"
+
+# 1. Start a hosted connect session for the end user.
+start = requests.get(
+    f"{BASE}/connect/{APP}",
+    headers=HEADERS,
+    params={"externalUserId": END_USER},
+    timeout=30,
+)
+start.raise_for_status()
+session = start.json()
+print("Open this link and authorize:\n", session["connectUrl"])
+
+# 2. Poll the session until it finishes.
+while True:
+    time.sleep(3)
+    state = requests.get(
+        f"{BASE}/connect/sessions/{session['connectSessionId']}",
+        headers=HEADERS,
+        timeout=30,
+    ).json()
+    if state["state"] in ("completed", "failed", "expired"):
+        break
+if state["state"] != "completed":
+    raise SystemExit(f"Not connected: {state.get('error')}")
+print("Connected:", state["connectionId"])
+
+# 3. Run the action for the end user.
+run = requests.post(
+    f"{BASE}/actions/run",
+    headers=HEADERS,
+    json={"actionKey": ACTION, "externalUserId": END_USER, "input": {}},
+    timeout=120,
+)
+body = run.json()
+if run.status_code != 200:
+    raise SystemExit(f"Run failed: {body['error']['code']}: {body['error']['message']}")
+print("Cost (micro-USD):", run.headers.get("X-AISA-Customer-Cost-Micros-USD"))
+print(body["output"])
+```
+
+```typescript TypeScript
+const BASE = "https://api.aisa.one/apis/v1/connector";
+const HEADERS = { Authorization: `Bearer ${process.env.AISA_API_KEY}` };
+const END_USER = "quickstart_user_1";
+const APP = "google_search_console";
+const ACTION = "google_search_console.list_sites";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// 1. Start a hosted connect session for the end user.
+const params = new URLSearchParams({ externalUserId: END_USER });
+const startRes = await fetch(`${BASE}/connect/${APP}?${params}`, { headers: HEADERS });
+if (!startRes.ok) throw new Error(`Start failed: ${await startRes.text()}`);
+const session = await startRes.json();
+console.log("Open this link and authorize:\n", session.connectUrl);
+
+// 2. Poll the session until it finishes.
+let state: any;
+do {
+  await sleep(3000);
+  const res = await fetch(`${BASE}/connect/sessions/${session.connectSessionId}`, { headers: HEADERS });
+  state = await res.json();
+} while (!["completed", "failed", "expired"].includes(state.state));
+if (state.state !== "completed") throw new Error(`Not connected: ${JSON.stringify(state.error)}`);
+console.log("Connected:", state.connectionId);
+
+// 3. Run the action for the end user.
+const runRes = await fetch(`${BASE}/actions/run`, {
+  method: "POST",
+  headers: { ...HEADERS, "Content-Type": "application/json" },
+  body: JSON.stringify({ actionKey: ACTION, externalUserId: END_USER, input: {} }),
+});
+const body = await runRes.json();
+if (!runRes.ok) throw new Error(`Run failed: ${body.error.code}: ${body.error.message}`);
+console.log("Cost (micro-USD):", runRes.headers.get("X-AISA-Customer-Cost-Micros-USD"));
+console.log(body.output);
+```
+
+</CodeGroup>
+
+## If something goes wrong
+
+| What you see | What to do |
+| --- | --- |
+| `401 unauthorized` | Check the key, and that it is sent as `Authorization: Bearer ...` |
+| `402 insufficient_balance` or `insufficient_wallet_balance` on the run | Top up your balance in the Console |
+| Session ends `failed` with `connect_denied` | The Google consent was declined. Start a new session and allow access |
+| Session ends `expired` | Nobody finished authorizing within 30 minutes. Start a new session |
+| `409 connection_required` on the run | The `externalUserId` on the run is not the one you connected. Use the same ID in both calls |
+| `400 invalid_request` with "the app refused this action for the connected account" | The account lacks the permission the action needs. Google apps are read-only in production, so use a `read` action |
+| Every path returns `404` with `{"error":"api endpoint not found"}` | AIsa Connect is temporarily unavailable in that environment. Contact [developer@aisa.one](mailto:developer@aisa.one) |
+
+The full list is in [Errors & troubleshooting](/resources/aisa-connect/errors).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authorizing end users" icon="user-check" href="/resources/aisa-connect/authorize-users">
+    Return users to your app with `redirectUrl`, connect credential-based apps, and reconnect.
+  </Card>
+  <Card title="Running actions" icon="play" href="/resources/aisa-connect/actions">
+    Input schemas, validation, idempotent retries and write safety.
+  </Card>
+  <Card title="Use with agents" icon="robot" href="/resources/aisa-connect/agents">
+    Let an agent discover and run actions over MCP or function calling.
+  </Card>
+  <Card title="Managing connections" icon="plug" href="/resources/aisa-connect/connections">
+    List, inspect and remove your end users' connections.
+  </Card>
+</CardGroup>
