@@ -5,7 +5,7 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from customer_price_presentation import price_family, pricing_summary
+from customer_price_presentation import customer_price_card, price_family, pricing_summary
 
 
 # Runtime declarations from Social publication and Commerce resource reads.
@@ -340,3 +340,27 @@ class CustomerPricePresentationTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ChargedOncePerResourceTest(unittest.TestCase):
+    """charge_once endpoints (a booking read) charge once per resource, not per request."""
+    BOOKING = {'customer_pricing': 'fixed_success', 'cost_contract': 'fixed_success',
+               'default_request_estimate_usd': 0.35, 'charge_scope': 'per_resource', 'charged_resource': 'booking'}
+
+    def test_booking_is_charged_once(self):
+        en = pricing_summary(self.BOOKING)
+        self.assertIn('$0.35 USD per booking, charged once.', en)
+        self.assertIn('later calls about the same booking are free', en)
+        self.assertNotIn('per successful request', en)
+        zh = pricing_summary(self.BOOKING, 'zh')
+        self.assertIn('每笔预订 $0.35 USD，只收一次。', zh)
+        self.assertNotIn('每次成功请求', zh)
+
+    def test_card_keeps_the_unit(self):
+        self.assertEqual(customer_price_card(self.BOOKING), '$0.35 USD per booking, charged once.')
+
+    def test_unknown_resource_and_invalid_scope(self):
+        other = dict(self.BOOKING, charged_resource='order')
+        self.assertIn('$0.35 USD per order, charged once.', pricing_summary(other))
+        for broken in (dict(self.BOOKING, charge_scope='per_call'), dict(self.BOOKING, charged_resource='Bad Name')):
+            self.assertIn('per successful request', pricing_summary(broken))

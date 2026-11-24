@@ -33,6 +33,32 @@ def reference_total(pricing):
     return usd(pricing.get('default_request_estimate_usd'))
 
 
+# Resources a charge_once endpoint charges once (runtime x-aisa-pricing
+# charge_scope "per_resource"): (English name, Chinese measure word + name,
+# English and Chinese wording of the answer that is charged).
+CHARGED_RESOURCES = {
+    'booking': ('booking', '笔预订', 'shows the booking confirmed', '显示预订已确认'),
+}
+
+
+def charged_resource(pricing):
+    """The resource a charge_once price is charged once for, or None."""
+    resource = pricing.get('charged_resource')
+    if pricing.get('charge_scope') != 'per_resource' or not isinstance(resource, str):
+        return None
+    return resource if re.fullmatch(r'[a-z][a-z0-9_.-]{0,63}', resource) else None
+
+
+def per_resource_summary(total, resource, zh):
+    en_name, cn_name, en_event, cn_event = CHARGED_RESOURCES.get(
+        resource, (resource.replace('_', ' '), '个' + resource.replace('_', ' '), 'is first answered as billable', '首次返回可计费结果'))
+    if zh:
+        return (f'公开参考价格：每{cn_name} {total} USD，只收一次。'
+                f'只有第一次{cn_event}的调用收费，之后对同一{cn_name[1:]}的调用不收费。')
+    return (f'Published reference price: {total} USD per {en_name}, charged once. '
+            f'Only the first call that {en_event} is charged; later calls about the same {en_name} are free.')
+
+
 def price_family(pricing):
     kind = pricing.get('kind')
     if kind in {'no_customer_charge', 'fixed_request', 'metered_event', 'metered_result', 'model_catalog', 'unpriced'}:
@@ -226,7 +252,9 @@ def pricing_summary(pricing, language='en'):
                                '提交任务时预留费用，任务结束时结算。')
     else:
         total = reference_total(pricing)
-        if family == 'fixed_success' and total:
+        if family == 'fixed_success' and total and charged_resource(pricing):
+            summary = per_resource_summary(total, charged_resource(pricing), zh)
+        elif family == 'fixed_success' and total:
             summary = t(f'Published reference price: {total} USD per successful request.', f'公开参考价格：每次成功请求 {total} USD。')
         else:
             leads = {
