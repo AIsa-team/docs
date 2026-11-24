@@ -32,7 +32,7 @@ COPY = {
         "billing": "Billing", "price": "Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.",
         "retry": "Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.",
         "success": "Successful delivery or a normal empty result", "error": "Error; use the returned HTTP status and retry guidance",
-        "social": "Social", "creators": "Creators",
+        "social": "Social", "creators": "Creators", "people": "People",
     },
     "zh": {
         "group": "任务", "tab": "API 参考", "overview": "概览",
@@ -42,7 +42,7 @@ COPY = {
         "billing": "计费", "price": "发送相同请求并带上 `X-AISA-Cost-Mode: quote`，获取与输入对应的报价；报价不执行任务，也不预扣资金。实际执行时预扣预计请求费用，按上述规则结算。用 `X-AISA-Max-Price-USD` 设置价格上限。",
         "retry": "执行任务时使用 `Idempotency-Key`。错误时查看 `error.code`、`error.request_id`、`error.retryable` 和 `error.retry_hint`。提示先核对结算时，应先查询原请求再决定是否重试；不能把待结算当作已退款。",
         "success": "成功交付或正常查空", "error": "错误；以实际 HTTP 状态和重试指引为准",
-        "social": "社媒", "creators": "达人",
+        "social": "社媒", "creators": "达人", "people": "人物与联系",
     },
 }
 
@@ -280,10 +280,15 @@ def write(root: Path, tasks: list[dict], api: str, release=None) -> None:
         groups = [g for g in tab["groups"] if g.get("group") != c["group"]]
         if tasks:
             by_domain = {}
+            domain_labels = {}
             for task in tasks:
                 d = task[language]
-                by_domain.setdefault(d["domain"], []).append(page_path(language, slug(d["task_id"])))
-            group = {"group": c["group"], "icon": "list-check", "pages": [page_path(language, "overview")] + [{"group": c.get(domain, domain.title()), "pages": pages} for domain, pages in sorted(by_domain.items())]}
+                domain = d["domain"]
+                by_domain.setdefault(domain, []).append(page_path(language, slug(d["task_id"])))
+                label = d.get("domain_label")
+                if isinstance(label, str) and label.strip() and domain not in domain_labels:
+                    domain_labels[domain] = label.strip()
+            group = {"group": c["group"], "icon": "list-check", "pages": [page_path(language, "overview")] + [{"group": domain_labels.get(domain) or c.get(domain, domain.title()), "pages": pages} for domain, pages in sorted(by_domain.items())]}
             at = next((i + 1 for i, g in enumerate(groups) if g.get("group") == c["overview"]), 0)
             groups.insert(at, group)
         tab["groups"] = groups
