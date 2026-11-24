@@ -536,6 +536,24 @@ class DynamicTests(unittest.TestCase):
             self.assertTrue((root / "tasks/research-find_sources.mdx").is_file())
             self.assertIn("Research", (root / "docs.json").read_text())
 
+    def test_people_domain_label_and_runtime_override(self):
+        people_tasks = tasks(detail("people.enrich"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs.json").write_text(json.dumps(navigation()))
+            sync.write(root, people_tasks, "https://api.aisa.one")
+            docs = json.loads((root / "docs.json").read_text())
+            by_lang = {e["language"]: e["tabs"][0]["groups"][1]["pages"][1]["group"] for e in docs["navigation"]["languages"]}
+            self.assertEqual({"en": "People", "zh": "人物与联系"}, by_lang)
+
+            overridden = copy.deepcopy(people_tasks)
+            overridden[0]["en"]["domain_label"] = "People & Contacts"
+            overridden[0]["zh"]["domain_label"] = "人与联系方式"
+            sync.write(root, overridden, "https://api.aisa.one")
+            docs = json.loads((root / "docs.json").read_text())
+            by_lang = {e["language"]: e["tabs"][0]["groups"][1]["pages"][1]["group"] for e in docs["navigation"]["languages"]}
+            self.assertEqual({"en": "People & Contacts", "zh": "人与联系方式"}, by_lang)
+
 
 if __name__ == "__main__":
     unittest.main()
