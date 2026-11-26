@@ -29,6 +29,7 @@ COPY = {
         "intro": "Each Task has one input contract and a normalized result. The API chooses sources using the task's strategy. Availability and fields depend on the selected input; a backup source is not guaranteed.",
         "list": "Available tasks", "task": "Task", "description": "Description",
         "contract": "The request and response panels use the schemas published by this API. Conditional requirements and allowed combinations are part of the request schema. Check the complete schema before combining filters or identities.",
+        "examples": "Examples", "examples_intro": "Each request below runs as written; the request panel offers the same examples.",
         "billing": "Billing", "price": "Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.",
         "retry": "Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.",
         "success": "Successful delivery or a normal empty result", "error": "Error; use the returned HTTP status and retry guidance",
@@ -39,6 +40,7 @@ COPY = {
         "intro": "每个任务使用统一的输入契约和结果结构。API 按任务策略选择数据源；可用能力和字段取决于具体输入，不保证每组条件都有备用来源。",
         "list": "可用任务", "task": "任务", "description": "说明",
         "contract": "上方请求和响应面板使用此 API 发布的 Schema。条件必填和参数组合限制属于请求契约；组合筛选条件或账号身份前，请查看完整 Schema。",
+        "examples": "示例", "examples_intro": "以下请求可直接运行；请求面板中也可选择同样的示例。",
         "billing": "计费", "price": "发送相同请求并带上 `X-AISA-Cost-Mode: quote`，获取与输入对应的报价；报价不执行任务，也不预扣资金。实际执行时预扣预计请求费用，按上述规则结算。用 `X-AISA-Max-Price-USD` 设置价格上限。",
         "retry": "执行任务时使用 `Idempotency-Key`。错误时查看 `error.code`、`error.request_id`、`error.retryable` 和 `error.retry_hint`。提示先核对结算时，应先查询原请求再决定是否重试；不能把待结算当作已退款。",
         "success": "成功交付或正常查空", "error": "错误；以实际 HTTP 状态和重试指引为准",
@@ -108,6 +110,9 @@ def release_tasks(contents: dict) -> list[dict]:
             for key in ("response_schema", "error_schema"):
                 if not isinstance(detail.get(key), dict) or not detail[key]:
                     raise ValueError(f"{task_id}: missing {key}; deploy the shared public contract first")
+        require([(e["name"], e["body"]) for e in examples(task["en"])] ==
+                [(e["name"], e["body"]) for e in examples(task["zh"])],
+                "Task examples differ between languages")
         require(task["en"].get("pricing") == task["zh"].get("pricing") and
                 task["en"].get("billing") == task["zh"].get("billing"),
                 "Task billing differs between languages")
@@ -162,6 +167,40 @@ def request_schema(detail: dict) -> dict:
         if field.get("required"):
             required.append(field["name"])
     return {"type": "object", "required": ["input"], "properties": {"input": {"type": "object", "properties": properties, "required": required}}}
+
+
+EXAMPLE_NAME_RE = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def examples(detail: dict) -> list[dict]:
+    """Documented requests of a Task, or [] for a release that has none.
+
+    Each example's request body must satisfy the Task's own request schema, so
+    a page never shows a request that the published contract rejects.
+    """
+    rows = detail.get("examples")
+    if rows is None:
+        return []
+    task_id = detail.get("task_id")
+    if not isinstance(rows, list) or not rows:
+        raise ValueError(f"{task_id}: invalid examples")
+    from jsonschema import Draft202012Validator
+    validator = Draft202012Validator(request_schema(detail))
+    out, names = [], set()
+    for row in rows:
+        if not isinstance(row, dict) or set(row) - {"name", "summary", "note", "input"}:
+            raise ValueError(f"{task_id}: invalid example")
+        name, summary, note, value = row.get("name"), row.get("summary"), row.get("note", ""), row.get("input")
+        if (not isinstance(name, str) or not EXAMPLE_NAME_RE.fullmatch(name) or name in names or
+                not isinstance(summary, str) or not summary.strip() or not isinstance(note, str) or
+                not isinstance(value, dict) or not value):
+            raise ValueError(f"{task_id}: invalid example")
+        names.add(name)
+        body = {"input": copy.deepcopy(value)}
+        if not validator.is_valid(body):
+            raise ValueError(f"{task_id}: example {name} does not satisfy the request schema")
+        out.append({"name": name, "summary": summary.strip(), "note": note.strip(), "body": body})
+    return out
 
 
 def pointer(document: dict, ref: str):
@@ -235,11 +274,16 @@ def openapi(tasks: list[dict], language: str, api: str, release=None) -> dict:
         for kind, schema in (("request", request_schema(detail)), ("response", detail["response_schema"]), ("error", detail["error_schema"])):
             schemas.update(component(schema, stem + "_" + kind))
         ref = lambda kind: {"$ref": "#/components/schemas/" + stem + "_" + kind}
+        body = {"schema": ref("request")}
+        documented = examples(detail)
+        if documented:
+            body["examples"] = {e["name"]: {"summary": e["summary"], **({"description": e["note"]} if e["note"] else {}), "value": e["body"]}
+                                for e in documented}
         paths[detail["path"]] = {"post": {
             "operationId": "task_" + stem, "summary": detail["name"], "description": detail.get("description", ""),
             "tags": [c["group"]],
             "parameters": [{"name": "Idempotency-Key", "in": "header", "schema": {"type": "string"}}],
-            "requestBody": {"required": True, "content": {"application/json": {"schema": ref("request")}}},
+            "requestBody": {"required": True, "content": {"application/json": body}},
             "responses": {"200": {"description": c["success"], "content": {"application/json": {"schema": ref("response")}}},
                           "default": {"description": c["error"], "content": {"application/json": {"schema": ref("error")}}}},
         }}
@@ -266,10 +310,25 @@ def slug(task_id: str) -> str:
     return task_id.replace(".", "-")
 
 
+def examples_markdown(detail: dict, language: str) -> str:
+    documented = examples(detail)
+    if not documented:
+        return ""
+    c = COPY[language]
+    parts = [f'## {c["examples"]}\n\n{c["examples_intro"]}\n']
+    for e in documented:
+        text = json.dumps(e["body"], indent=2, ensure_ascii=False)
+        if "```" in text:
+            raise ValueError(f'{detail["task_id"]}: example {e["name"]} cannot be fenced')
+        line = f'**{safe(e["summary"])}**' + (f'. {safe(e["note"])}' if e["note"] else "")
+        parts.append(f"{line}\n\n```json\n{text}\n```\n")
+    return "\n".join(parts) + "\n"
+
+
 def task_page(detail: dict, language: str) -> str:
     c = COPY[language]
     front = f'---\nopenapi: "{page_path(language, "openapi.json")} POST {detail["path"]}"\ntitle: {json.dumps(detail["name"], ensure_ascii=False)}\n---\n'
-    return front + f'\n{c["contract"]}\n\n## {c["billing"]}\n\n' + pricing_markdown(detail, language) + "\n" + c["price"] + "\n\n" + c["retry"] + "\n"
+    return front + f'\n{c["contract"]}\n\n' + examples_markdown(detail, language) + f'## {c["billing"]}\n\n' + pricing_markdown(detail, language) + "\n" + c["price"] + "\n\n" + c["retry"] + "\n"
 
 
 def overview(tasks: list[dict], language: str) -> str:

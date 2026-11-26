@@ -315,6 +315,60 @@ class PublicationTests(unittest.TestCase):
             docs = json.loads((self.root / "docs.json").read_text())
             self.assertEqual("existing-page", docs["navigation"]["languages"][0]["tabs"][0]["groups"][0]["pages"][0])
 
+    def test_examples_become_openapi_request_examples_and_page_sections(self):
+        plain = detail("creators.find_contact")
+        sync.write(self.root, tasks(plain), "https://api.aisa.one")
+        before = {p.relative_to(self.root).as_posix(): p.read_text() for p in self.root.rglob("*") if p.is_file()}
+        for language in sync.LANGUAGES:
+            body = json.loads(before[sync.page_path(language, "openapi.json")])["paths"][plain["path"]]["post"]["requestBody"]
+            self.assertEqual({"schema"}, set(body["content"]["application/json"]))
+            self.assertNotIn(sync.COPY[language]["examples"], before[sync.page_path(language, "creators-find_contact.mdx")])
+        rows = tasks(copy.deepcopy(plain))
+        rows[0]["en"]["examples"] = [
+            {"name": "tiktok", "summary": "A *TikTok* creator", "note": "Use a <public> account.", "input": {"platform": "tiktok", "countries": ["US"]}},
+            {"name": "instagram", "summary": "An Instagram creator", "input": {"platform": "instagram"}},
+        ]
+        rows[0]["zh"]["examples"] = [
+            {"name": "tiktok", "summary": "TikTok 达人", "note": "使用公开账号。", "input": {"platform": "tiktok", "countries": ["US"]}},
+            {"name": "instagram", "summary": "Instagram 达人", "input": {"platform": "instagram"}},
+        ]
+        sync.write(self.root, rows, "https://api.aisa.one")
+        for language in sync.LANGUAGES:
+            doc = json.loads((self.root / sync.page_path(language, "openapi.json")).read_text())
+            media = doc["paths"][plain["path"]]["post"]["requestBody"]["content"]["application/json"]
+            self.assertEqual(["tiktok", "instagram"], list(media["examples"]))
+            self.assertEqual({"input": {"platform": "tiktok", "countries": ["US"]}}, media["examples"]["tiktok"]["value"])
+            self.assertEqual(rows[0][language]["examples"][0]["summary"], media["examples"]["tiktok"]["summary"])
+            self.assertEqual(rows[0][language]["examples"][0]["note"], media["examples"]["tiktok"]["description"])
+            self.assertNotIn("description", media["examples"]["instagram"])
+            page = (self.root / sync.page_path(language, "creators-find_contact.mdx")).read_text()
+            section = page.split(f'## {sync.COPY[language]["examples"]}\n', 1)[1].split(f'## {sync.COPY[language]["billing"]}', 1)[0]
+            self.assertEqual(2, section.count("```json\n"))
+            self.assertIn(json.dumps({"input": {"platform": "instagram"}}, indent=2), section)
+            self.assertNotIn("<public>", section)
+            self.assertNotIn("*TikTok*", section)
+            self.assertLess(page.index(sync.COPY[language]["contract"]), page.index(sync.COPY[language]["examples"]))
+        # Removing the examples restores the exact earlier publication.
+        sync.write(self.root, tasks(plain), "https://api.aisa.one")
+        self.assertEqual(before, {p.relative_to(self.root).as_posix(): p.read_text() for p in self.root.rglob("*") if p.is_file()})
+
+    def test_examples_that_break_the_request_schema_or_languages_are_refused(self):
+        good = {"name": "tiktok", "summary": "TikTok", "input": {"platform": "tiktok"}}
+        for bad in ([], {"tiktok": good}, [dict(good, input={"platform": "youtube"})],
+                    [dict(good, input={"countries": ["US"]})], [dict(good, name="TikTok")],
+                    [good, good], [dict(good, summary=" ")], [dict(good, input={})],
+                    [dict(good, provider="private")], [dict(good, note=1)]):
+            rows = tasks(detail())
+            for language in sync.LANGUAGES:
+                rows[0][language]["examples"] = copy.deepcopy(bad)
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                sync.write(self.root, rows, "https://api.aisa.one")
+        rows = tasks(detail())
+        rows[0]["en"]["examples"] = [good]
+        rows[0]["zh"]["examples"] = [dict(good, input={"platform": "instagram"})]
+        with self.assertRaises(ValueError):
+            sync.release_tasks({sync.TASK_CATALOG: encoded({"schema_version": 1, "tasks": rows})})
+
     def test_overview_names_remain_literal_text_inside_one_table_cell(self):
         special = (r'Back\`ticks` [link](https://example.test) ![image](x) *bold* _text_ '
                    r'\{value} <Widget /> | & &#91;literal&#93;')
