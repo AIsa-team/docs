@@ -14,6 +14,12 @@ x-aisa-generated-description-sha256: "f5421a8f1accd464b54c20f600c8627d7ef42fa8f4
 - **Method and path:** GET /apis/v1/apple-app-store/reviews
 - **Availability:** enabled
 - **Request URL template:** `https://api.aisa.one/apis/v1/apple-app-store/reviews`
+- **country:** query; optional
+- **page:** query; optional
+- **product&#95;id:** query; required
+- **sort:** query; optional
+- **timeout:** query; optional
+- **aisa&#95;cursor:** query; optional
 
 [Complete OpenAPI definition](https://aisa.one/docs/openapi-public/apple-app-store.json)
 
@@ -29,7 +35,73 @@ Effective request declaration (including authentication and referenced schemas):
       "url": "https://api.aisa.one"
     }
   ],
-  "parameters": [],
+  "parameters": [
+    {
+      "in": "query",
+      "name": "country",
+      "required": false,
+      "schema": {
+        "maxLength": 2,
+        "minLength": 2,
+        "pattern": "^[a-zA-Z]{2}$",
+        "type": "string"
+      }
+    },
+    {
+      "in": "query",
+      "name": "page",
+      "required": false,
+      "schema": {
+        "maximum": 2147483647,
+        "minimum": 1,
+        "type": "integer"
+      }
+    },
+    {
+      "in": "query",
+      "name": "product_id",
+      "required": true,
+      "schema": {
+        "maxLength": 20,
+        "minLength": 1,
+        "pattern": "^[1-9][0-9]{0,19}$",
+        "type": "string"
+      }
+    },
+    {
+      "in": "query",
+      "name": "sort",
+      "required": false,
+      "schema": {
+        "enum": [
+          "mosthelpful",
+          "mostrecent"
+        ],
+        "type": "string"
+      }
+    },
+    {
+      "in": "query",
+      "name": "timeout",
+      "required": false,
+      "schema": {
+        "exclusiveMinimum": 0,
+        "maximum": 90,
+        "type": "number"
+      }
+    },
+    {
+      "description": "Next page: the aisa_pagination.next_cursor of the previous response.",
+      "in": "query",
+      "name": "aisa_cursor",
+      "required": false,
+      "schema": {
+        "maxLength": 4096,
+        "minLength": 1,
+        "type": "string"
+      }
+    }
+  ],
   "security": [
     {
       "bearerAuth": []
@@ -64,6 +136,9 @@ The response observations below come from successful probes or sampled requests.
           "author": {
             "additionalProperties": true,
             "properties": {
+              "author_id": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               }
@@ -79,6 +154,12 @@ The response observations below come from successful probes or sampled requests.
           "rating": {
             "type": "integer"
           },
+          "review_date": {
+            "type": "string"
+          },
+          "reviewed_version": {
+            "type": "string"
+          },
           "text": {
             "type": "string"
           },
@@ -89,6 +170,60 @@ The response observations below come from successful probes or sampled requests.
         "type": "object"
       },
       "type": "array"
+    },
+    "search_information": {
+      "additionalProperties": true,
+      "properties": {
+        "results_count": {
+          "type": "integer"
+        },
+        "reviews_for_current_version": {
+          "type": "integer"
+        },
+        "total_page_count": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "search_metadata": {
+      "additionalProperties": true,
+      "properties": {
+        "created_at": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "processed_at": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "total_time_taken": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "search_parameters": {
+      "additionalProperties": true,
+      "properties": {
+        "country": {
+          "type": "string"
+        },
+        "page": {
+          "type": "integer"
+        },
+        "product_id": {
+          "type": "string"
+        },
+        "sort": {
+          "type": "string"
+        }
+      },
+      "type": "object"
     }
   },
   "type": "object"
@@ -97,7 +232,13 @@ The response observations below come from successful probes or sampled requests.
 
 ## Cost and request rules
 
-Usage-based pricing. Default request estimate: $0.00015 USD. The final charge depends on actual usage. Your account price may differ; use a request quote where supported.
+Published reference price: $0.00015 USD per successful request. Your account price may differ; use a request quote where supported.
 
+## Pagination
+
+- Pass `aisa_pagination.next_cursor` as `aisa_cursor` (query parameter) to fetch the next page; stop when `aisa_pagination.has_more` is false.
+- The same values are returned in the `X-AISA-Has-More` and `X-AISA-Next-Cursor` response headers.
+- The cursor is an opaque value; pass it back unchanged.
+- Results may repeat across pages; de-duplicate by a stable id.
 
 {/* aisa-contract-details:end */}
