@@ -32,7 +32,7 @@ COPY = {
         "billing": "Billing", "price": "Obtain an input-specific quote by sending the same request with `X-AISA-Cost-Mode: quote`; quoting neither executes the Task nor reserves funds. Execution reserves the estimated request charge and settles under the rules above. Use `X-AISA-Max-Price-USD` to cap the price.",
         "retry": "Use an `Idempotency-Key` when executing a Task. For errors, inspect `error.code`, `error.request_id`, `error.retryable` and `error.retry_hint`. A reconciliation hint requires checking the existing request before retrying; do not assume a pending settlement is a refund.",
         "success": "Successful delivery or a normal empty result", "error": "Error; use the returned HTTP status and retry guidance",
-        "social": "Social", "creators": "Creators", "people": "People",
+        "commerce": "Commerce", "social": "Social", "creators": "Creators", "people": "People",
     },
     "zh": {
         "group": "任务", "tab": "API 参考", "overview": "概览",
@@ -42,16 +42,46 @@ COPY = {
         "billing": "计费", "price": "发送相同请求并带上 `X-AISA-Cost-Mode: quote`，获取与输入对应的报价；报价不执行任务，也不预扣资金。实际执行时预扣预计请求费用，按上述规则结算。用 `X-AISA-Max-Price-USD` 设置价格上限。",
         "retry": "执行任务时使用 `Idempotency-Key`。错误时查看 `error.code`、`error.request_id`、`error.retryable` 和 `error.retry_hint`。提示先核对结算时，应先查询原请求再决定是否重试；不能把待结算当作已退款。",
         "success": "成功交付或正常查空", "error": "错误；以实际 HTTP 状态和重试指引为准",
-        "social": "社媒", "creators": "达人", "people": "人物与联系",
+        "commerce": "电商", "social": "社媒", "creators": "达人", "people": "人物与联系",
     },
 }
+# Matches packages/tasklayer/identity.go in AIsaServices: supports both
+# 2-segment (domain.action) and 3-segment platform-qualified
+# (domain.platform.action) Task IDs.
+TASK_ID_RE = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*)?\.[a-z][a-z0-9_]*")
+PLATFORM_LABELS = {
+    "en": {
+        "alibaba-1688": "1688",
+        "amazon": "Amazon",
+        "temu": "Temu",
+        "tiktok-shop": "TikTok Shop",
+        "walmart": "Walmart",
+    },
+    "zh": {
+        "alibaba-1688": "1688",
+        "amazon": "Amazon",
+        "temu": "Temu",
+        "tiktok-shop": "TikTok Shop",
+        "walmart": "Walmart",
+    },
+}
+
+
+def platform_label(platform: str, language: str, detail: dict) -> str:
+    label = detail.get("platform_label")
+    if isinstance(label, str) and label.strip():
+        return label.strip()
+    known = PLATFORM_LABELS.get(language, {}).get(platform)
+    if known:
+        return known
+    return " ".join(part.capitalize() for part in re.split(r"[-_]+", platform) if part)
 
 
 def catalog_ids(listing: dict) -> list[str]:
     if not isinstance(listing.get("data"), list):
         raise ValueError("Task catalog has no data array")
     ids = [row.get("task_id") for row in listing["data"] if isinstance(row, dict)]
-    if len(ids) != len(listing["data"]) or any(not isinstance(i, str) or not re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", i) for i in ids) or len(ids) != len(set(ids)):
+    if len(ids) != len(listing["data"]) or any(not isinstance(i, str) or not TASK_ID_RE.fullmatch(i) for i in ids) or len(ids) != len(set(ids)):
         raise ValueError("Task catalog contains invalid or duplicate identities")
     if len({slug(task_id) for task_id in ids}) != len(ids):
         raise ValueError("Task identities collide in documentation paths")
@@ -291,11 +321,26 @@ def write(root: Path, tasks: list[dict], api: str, release=None) -> None:
             for task in tasks:
                 d = task[language]
                 domain = d["domain"]
-                by_domain.setdefault(domain, []).append(page_path(language, slug(d["task_id"])))
+                entry_bucket = by_domain.setdefault(domain, {"direct": [], "platforms": {}, "platform_labels": {}})
+                page = page_path(language, slug(d["task_id"]))
+                parts = d["task_id"].split(".")
+                if len(parts) == 3:
+                    platform = parts[1]
+                    entry_bucket["platforms"].setdefault(platform, []).append(page)
+                    if platform not in entry_bucket["platform_labels"]:
+                        entry_bucket["platform_labels"][platform] = platform_label(platform, language, d)
+                else:
+                    entry_bucket["direct"].append(page)
                 label = d.get("domain_label")
                 if isinstance(label, str) and label.strip() and domain not in domain_labels:
                     domain_labels[domain] = label.strip()
-            group = {"group": c["group"], "icon": "list-check", "pages": [page_path(language, "overview")] + [{"group": domain_labels.get(domain) or c.get(domain, domain.title()), "pages": pages} for domain, pages in sorted(by_domain.items())]}
+            domain_groups = []
+            for domain, bucket in sorted(by_domain.items()):
+                pages = list(bucket["direct"])
+                for platform, platform_pages in sorted(bucket["platforms"].items()):
+                    pages.append({"group": bucket["platform_labels"][platform], "pages": platform_pages})
+                domain_groups.append({"group": domain_labels.get(domain) or c.get(domain, domain.title()), "pages": pages})
+            group = {"group": c["group"], "icon": "list-check", "pages": [page_path(language, "overview")] + domain_groups}
             at = next((i + 1 for i, g in enumerate(groups) if g.get("group") == c["overview"]), 0)
             groups.insert(at, group)
         tab["groups"] = groups
@@ -333,7 +378,7 @@ def validate_publication(root: Path, api="https://api.aisa.one") -> set[str]:
             raise ValueError("Task publication requires a nonempty contract from the selected API")
         for path, methods in document["paths"].items():
             task_id = path.removeprefix("/v1/tasks/")
-            if path != "/v1/tasks/" + task_id or not re.fullmatch(r"[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*", task_id) or set(methods) != {"post"}:
+            if path != "/v1/tasks/" + task_id or not TASK_ID_RE.fullmatch(task_id) or set(methods) != {"post"}:
                 raise ValueError("Invalid Task operation in publication")
             name = slug(task_id) + ".mdx"
             expected.add(name)
