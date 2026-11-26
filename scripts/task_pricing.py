@@ -32,6 +32,13 @@ def field(detail, name):
     return next((f.get("selector") or f["name"] for f in detail.get("input", []) if f.get("name") == name), name)
 
 
+def price_selection_sort_key(item):
+    key = item[0]
+    if isinstance(key, str) and key.isdigit():
+        return (0, int(key), key)
+    return (1, 0, str(key))
+
+
 def pricing_markdown(detail, language):
     """Refuse incomplete/unknown billing semantics before replacing any pages."""
     zh = language == "zh"
@@ -56,7 +63,7 @@ def pricing_markdown(detail, language):
         if not isinstance(price_by, dict) or not isinstance(price_by.get("values"), dict) or not price_by["values"]:
             raise ValueError("Invalid Task parameter prices")
         selector = field(detail, price_by.get("input"))
-        for value, rates in sorted(price_by["values"].items()):
+        for value, rates in sorted(price_by["values"].items(), key=price_selection_sort_key):
             if not isinstance(value, str) or not value:
                 raise ValueError("Invalid Task price selection")
             rows.append((f"{selector} = {value}", tiers(rates), value))

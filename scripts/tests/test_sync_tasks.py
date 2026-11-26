@@ -476,6 +476,84 @@ class DynamicTests(unittest.TestCase):
             by_lang = {e["language"]: e["tabs"][0]["groups"][1]["pages"][1]["group"] for e in docs["navigation"]["languages"]}
             self.assertEqual({"en": "People & Contacts", "zh": "人与联系方式"}, by_lang)
 
+    def test_three_segment_platform_tasks_nest_by_domain_platform_and_keep_two_segment_flat(self):
+        commerce_ids = (
+            "commerce.alibaba-1688.get_product",
+            "commerce.alibaba-1688.search_products",
+            "commerce.amazon.get_product",
+            "commerce.tiktok-shop.list_reviews",
+        )
+        other_ids = ("company.browse_funding_rounds", "creators.search")
+        all_ids = sorted((*commerce_ids, *other_ids))
+        self.assertEqual(all_ids, sync.catalog_ids({"data": [{"task_id": i} for i in reversed(all_ids)]}))
+        for bad in ("commerce..get_product", "commerce.-bad.get_product", "commerce.bad-.get_product", "commerce.a.b.c", "single"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                sync.catalog_ids({"data": [{"task_id": bad}]})
+
+        rows = tasks(*(detail(i) for i in all_ids))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs.json").write_text(json.dumps(navigation()))
+            sync.write(root, rows, "https://dev-api.aisa.one")
+            pages = sync.validate_publication(root, api="https://dev-api.aisa.one")
+            self.assertEqual(2 * (len(all_ids) + 1), len(pages))
+
+            docs = json.loads((root / "docs.json").read_text())
+            by_lang = {e["language"]: e["tabs"][0]["groups"][1]["pages"] for e in docs["navigation"]["languages"]}
+            self.assertEqual(
+                [
+                    "tasks/overview",
+                    {
+                        "group": "Commerce",
+                        "pages": [
+                            {"group": "1688", "pages": ["tasks/commerce-alibaba-1688-get_product", "tasks/commerce-alibaba-1688-search_products"]},
+                            {"group": "Amazon", "pages": ["tasks/commerce-amazon-get_product"]},
+                            {"group": "TikTok Shop", "pages": ["tasks/commerce-tiktok-shop-list_reviews"]},
+                        ],
+                    },
+                    {"group": "Company", "pages": ["tasks/company-browse_funding_rounds"]},
+                    {"group": "Creators", "pages": ["tasks/creators-search"]},
+                ],
+                by_lang["en"],
+            )
+            self.assertEqual(
+                [
+                    "zh/tasks/overview",
+                    {
+                        "group": "电商",
+                        "pages": [
+                            {"group": "1688", "pages": ["zh/tasks/commerce-alibaba-1688-get_product", "zh/tasks/commerce-alibaba-1688-search_products"]},
+                            {"group": "Amazon", "pages": ["zh/tasks/commerce-amazon-get_product"]},
+                            {"group": "TikTok Shop", "pages": ["zh/tasks/commerce-tiktok-shop-list_reviews"]},
+                        ],
+                    },
+                    {"group": "Company", "pages": ["zh/tasks/company-browse_funding_rounds"]},
+                    {"group": "达人", "pages": ["zh/tasks/creators-search"]},
+                ],
+                by_lang["zh"],
+            )
+
+    def test_numeric_price_by_keys_sort_numerically(self):
+        d = detail("commerce.amazon.list_reviews")
+        d["billing"] = {"mode": "fixed"}
+        d["pricing"].update(
+            kind="fixed_success",
+            unit="successful_request",
+            price_by={
+                "input": "requested_review_pages",
+                "values": {
+                    "0": {"normal": 0},
+                    "1": {"normal": 44000},
+                    "2": {"normal": 84000},
+                    "10": {"normal": 420000},
+                },
+            },
+        )
+        d["pricing"].pop("units")
+        page = pricing_markdown(d, "en")
+        positions = [page.index(f"requested_review_pages = {k} |") for k in ("0", "1", "2", "10")]
+        self.assertEqual(sorted(positions), positions)
+
 
 if __name__ == "__main__":
     unittest.main()
