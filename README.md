@@ -554,6 +554,13 @@ no second writer or bypass of the formal receipt. The
 existing `RUNTIME_CONTRACT_PUBLISH` switch and manual dry-run default apply. This
 change does not enable Tasks, change prices or execute paid calls.
 
+A Task detail may carry `examples` (`name`, `summary`, optional `note`,
+`input`). Each becomes a named OpenAPI request example (Mintlify's request
+panel and code samples) and a fenced JSON request under an Examples heading on
+the page. Every example body must satisfy the Task's own request schema and
+match between languages, or generation fails and the previous publication is
+kept. A release without examples renders exactly as before.
+
 Production order: merge Docs #387, then deploy Services #1536. Before the worker
 publishes Task artifacts, the existing Raw publication continues unchanged.
 After a fresh production release includes `tasks/catalog.json`, the next
