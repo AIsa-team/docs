@@ -108,7 +108,29 @@ AIsa Connect 里的一切都归属于**API Key 所在的 AIsa 账户**：
 - 同一账户的所有 API Key 看到的是同一批连接；以该账户身份用 OAuth 登录的 MCP 或 CLI 客户端也一样。
 - 账户之间完全隔离：一个 AIsa 账户永远看不到、也用不了另一个账户的连接。
 - 你在[控制台](/zh/resources/aisa-connect/console)里建立的连接也属于同一账户，终端用户 ID 是 `console-user-<你的用户 ID>`。
-- 目前没有连接的团队共享或按成员分配权限的机制。
+
+### 团队成员
+
+在组织里，用某个成员的 API Key 或登录身份建立的连接，归这个成员：
+
+- 只有这个成员能看到和使用。所有者和管理员也看不到，别人没法用成员的 Gmail 做事。
+- 成员可以把它共享给团队（`shared: true`）。之后所有成员都能看到和使用，但只有建立连接的成员能修改、重新连接或删除。
+- 团队权限上线前建立的连接，或者用不属于任何成员的 key 建立的连接，算作已共享，由所有者和管理员管理。不属于任何成员的 key 只能看到和使用已共享的连接。
+- 成员离开组织后，他建立的连接谁都不能再用，包括已共享的，直到他重新加入；他的 API Key 也不能再连接新账号。
+
+别的成员没共享的连接，对你返回 `404 not_found`。修改或删除你只能使用的连接，返回 `403 permission_denied`。每个连接的 `manageable` 表示你能不能修改它。
+
+### 工具
+
+每个连接还决定它的应用里哪些动作可以执行，对所有使用它的人都一样：`tools.operations` 按整类操作开启（`read`、`write`、`destructive`），`tools.allow` 和 `tools.deny` 单独开启或关闭某个动作。新连接默认可以执行所有动作。执行连接工具之外的动作，返回 `403 action_not_allowed`，`error.details.actionKey` 和 `error.details.operationType` 写明是哪个动作，不会扣费。
+
+```bash
+curl -X PATCH https://api.aisa.one/apis/v1/connector/connections/con_123 \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"shared": true, "tools": {"operations": ["read"], "allow": ["gmail.send_email"], "deny": []}}'
+```
+
+`tools` 会整体替换连接原来的设置。应用有哪些动作、各是什么操作类型，用 `GET /apps/{app}/actions` 查看。
 
 ## 鉴权
 

@@ -108,7 +108,29 @@ Everything in AIsa Connect belongs to the **AIsa account that owns the API key**
 - All API keys of the same account see the same connections, and so does an MCP or CLI client signed in with OAuth as that account.
 - Accounts are fully separate: one AIsa account can never see or use another account's connections.
 - Connections you make in the [Console](/resources/aisa-connect/console) belong to the same account, under the end user ID `console-user-<your user id>`.
-- There is no team sharing or per-member permission model for connections yet.
+
+### Team members
+
+In an organization, a connection made with a member's API key or sign-in is that member's:
+
+- Only that member sees and uses it. Owners and admins do not, so nobody else can act with a member's Gmail.
+- The member can share it with the team (`shared: true`). Every member then sees and uses it, but only the member who connected it can change, reconnect or delete it.
+- A connection made before team access existed, or with a key that no member created, counts as shared, and owners and admins manage it. A key that no member created sees and uses only shared connections.
+- When a member leaves the organization, nobody can use the connections they made, shared ones included, until they rejoin, and their API keys cannot connect new accounts.
+
+A connection another member has not shared is `404 not_found` for you. Changing or deleting one you only use is `403 permission_denied`. Each connection says whether you can change it in `manageable`.
+
+### Tools
+
+Each connection also decides which of its app's actions run on it, for whoever uses it: whole operation types (`read`, `write`, `destructive`) in `tools.operations`, plus single actions in `tools.allow` and `tools.deny`. A new connection runs every action. Running one the connection's tools leave out is `403 action_not_allowed`, with `error.details.actionKey` and `error.details.operationType`, and nothing is charged.
+
+```bash
+curl -X PATCH https://api.aisa.one/apis/v1/connector/connections/con_123 \
+  -H "Authorization: Bearer $AISA_API_KEY" -H "Content-Type: application/json" \
+  -d '{"shared": true, "tools": {"operations": ["read"], "allow": ["gmail.send_email"], "deny": []}}'
+```
+
+`tools` replaces the connection's whole policy. List the app's actions and their operation types with `GET /apps/{app}/actions`.
 
 ## Authentication
 
