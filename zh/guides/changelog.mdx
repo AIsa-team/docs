@@ -11,6 +11,16 @@ icon: "clock-rotate-left"
 
 ## 2026 年 11 月 27 日
 
+### AIsa Social：删除已发布的帖子会先从平台撤下
+
+**受影响的调用方：** 对已发布或部分发布的帖子调用 `DELETE /apis/v1/social/posts/{postId}` 的调用方，以及读取帖子 `status` 的调用方。草稿、排期、失败和已取消帖子的删除不变。
+
+- **删除会先从平台撤下：** 以前删除已发布的帖子返回 `409 post_published`。现在会先把帖子从所有仍在线的平台撤下，再删除，之后 `GET /posts/{postId}` 返回 `404`。撤下走的是你自己也能调用的同一个接口：X 用 `POST /twitter/posts/{postId}/unpublish`，按其价格**每条 $0.001** 收费；其他平台用免费的 `POST /posts/{postId}/unpublish`。部分发布的帖子同样处理，以前删除它只会删掉 AIsa 里的记录。
+- **无法撤下的平台：** 帖子如果在 Instagram、TikTok 等 AIsa 无法撤下帖子的平台上，删除返回 `422 unsupported_on_platform` 并写明平台，不会发出任何请求，帖子保留。请先在该平台上删除。
+- **部分失败可以安全重试：** 部分平台失败时帖子保留，已撤下的平台带 `removedAt`，错误的 `details.failed` 逐个写明失败的平台、原因和 request id。再发一次 `DELETE` 只会处理仍在线的平台，已撤下的 X 帖子不会重复收费。
+- **新增 `removed` 状态：** 帖子发布过的平台全部撤下后（通过 unpublish、删除或在平台上直接删除），`status` 显示为 `removed`，不再是 `published`。`GET /posts?status=removed` 可以列出这类帖子，`status=published` 不再包含它们。
+- **权限：** 撤下在线帖子需要有发布权限的 key；只有草稿权限的 key 会得到 `403 insufficient_scope`。
+
 ### AIsa Social：立即发布先返回 202，再在后台发布
 
 **受影响的调用方：** 通过 API 或 MCP 调用 `POST /apis/v1/social/posts` 并带 `publishNow: true` 的，或用 `PUT /apis/v1/social/posts/{postId}` 立即发布草稿或失败帖的，并且依赖这次响应里的平台帖子 ID 或 `201`/`207` 状态码的调用方。草稿和排期帖不受影响。

@@ -11,6 +11,16 @@ Stay up to date with what's new across the AIsa platform — API endpoints, docu
 
 ## November 27, 2026
 
+### AIsa Social: deleting a published post removes it from its platforms
+
+**Who is affected:** callers of `DELETE /apis/v1/social/posts/{postId}` on a published or partly published post, and anyone who reads a post's `status`. Drafts, scheduled, failed and cancelled posts delete exactly as before.
+
+- **Delete now removes the post from its platforms.** On a published post, `DELETE /posts/{postId}` used to answer `409 post_published`. It now removes the post from every platform it is still live on, then deletes it, and `GET /posts/{postId}` answers `404`. Each platform is removed through the same call you can make yourself: on X, `POST /twitter/posts/{postId}/unpublish` at its price of **$0.001 per post**. Elsewhere it uses `POST /posts/{postId}/unpublish`, which is free. A partly published post is handled the same way. Before, deleting one removed only AIsa's record.
+- **Platforms that cannot remove posts.** If the post is live on a platform AIsa cannot remove posts from, such as Instagram or TikTok, the delete answers `422 unsupported_on_platform` and names the platform. Nothing is sent and the post is kept. Delete it on that platform first.
+- **Partial failure is safe to retry.** If some platforms fail, the post is kept. The platforms already removed show `removedAt`. The error names each failed platform in `details.failed`, with the reason and request id. Send `DELETE` again: it only sends what is still live, so a removed X post is never charged twice.
+- **New `removed` status.** A post whose published platforms have all removed it, through unpublish, delete, or deletion on the platform itself, now shows `status: "removed"` instead of `published`. `GET /posts?status=removed` lists them, and `status=published` no longer includes them.
+- **Permissions.** Removing a live post needs a key allowed to publish. A key limited to drafts gets `403 insufficient_scope`.
+
 ### AIsa Social: publish now answers 202, then publishes in the background
 
 **Who is affected:** API and MCP callers that send `POST /apis/v1/social/posts` with `publishNow: true`, or publish a draft or failed post now with `PUT /apis/v1/social/posts/{postId}`, and read platform post ids or a `201`/`207` from that answer. Drafts and scheduled posts are unchanged.
