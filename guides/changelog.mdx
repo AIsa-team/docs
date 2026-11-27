@@ -9,6 +9,25 @@ Stay up to date with what's new across the AIsa platform — API endpoints, docu
 
 ---
 
+## November 27, 2026
+
+### AIsa Social: publish now answers 202, then publishes in the background
+
+**Who is affected:** API and MCP callers that send `POST /apis/v1/social/posts` with `publishNow: true`, or publish a draft or failed post now with `PUT /apis/v1/social/posts/{postId}`, and read platform post ids or a `201`/`207` from that answer. Drafts and scheduled posts are unchanged.
+
+- **New default.** A publish-now request now answers as soon as the post is saved, with `202 Accepted`, `status: "publishing"` and the `pst_` id. AIsa then publishes it in the background. The outcome arrives as the `post.published`, `post.partial` or `post.failed` webhook, or you can read `GET /posts/{postId}` until `status` is no longer `publishing`. Text posts usually settle within seconds; video can take a minute or two. If the platform refuses the post, it keeps its id with status `failed` and the reason, and you can edit and publish it again.
+- **To keep the old answer,** send `?wait=true` or the header `Prefer: wait`. The request then waits for the platform and answers `201` with platform post ids, `207` when some platforms failed, the error, or `202` if the outcome is still unknown after about 100 seconds. The response carries `Preference-Applied: wait`.
+- **Billing is unchanged.** You are still charged per target only once it is verifiably published. A target that fails, or is never sent, is not charged.
+- **Retries are safe.** Sending the same request again with the same `Idempotency-Key` while the post is publishing returns `202` with the same post. It never creates a second post.
+
+### AIsa Social: media by URL, permissions and balance
+
+- **Media by URL.** `mediaItems[].url` (and `customMedia[].url`) accepts a public https URL of the media file itself. MCP agents that cannot upload a file use this. AIsa fetches the start of the file before it schedules or publishes the post. It refuses a URL that does not answer, is not on the public internet, serves something other than the item's `type` (for example an HTML page instead of a video), or is larger than 500 MB. A refused URL answers `422 validation_failed`, and `param` names the item. Drafts are not fetched.
+- **Organization MCP connections follow their key.** An MCP client connected through an organization now has the Social permissions of its managed key, like a personal connection. With no restriction it can publish; set the key to read or draft to stop it. Before, it could only read and draft.
+- **Free platforms publish at zero balance.** The `402 insufficient_balance` check now applies only to posts that cost something, such as X. A post whose quoted price is $0 is scheduled or published even at zero balance.
+
+---
+
 ## November 7, 2026
 
 ### Unified APIs

@@ -9,6 +9,25 @@ icon: "clock-rotate-left"
 
 ---
 
+## 2026 年 11 月 27 日
+
+### AIsa Social：立即发布先返回 202，再在后台发布
+
+**受影响的调用方：** 通过 API 或 MCP 调用 `POST /apis/v1/social/posts` 并带 `publishNow: true` 的，或用 `PUT /apis/v1/social/posts/{postId}` 立即发布草稿或失败帖的，并且依赖这次响应里的平台帖子 ID 或 `201`/`207` 状态码的调用方。草稿和排期帖不受影响。
+
+- **新的默认行为：** 立即发布的请求在帖子保存后马上返回 `202 Accepted`，`status: "publishing"` 和 `pst_` ID，随后由 AIsa 在后台发布。结果通过 `post.published`、`post.partial` 或 `post.failed` webhook 送达，也可以轮询 `GET /posts/{postId}`，直到 `status` 不再是 `publishing`。文字帖通常几秒内完成，视频可能需要一两分钟。平台拒绝时，帖子保留原 ID，状态为 `failed` 并带原因，可以修改后重新发布。
+- **保留原来的响应：** 加 `?wait=true` 或请求头 `Prefer: wait`，请求会等平台处理完再返回：成功返回 `201` 和平台帖子 ID，部分平台失败返回 `207`，失败返回错误，约 100 秒后仍无结果返回 `202`。响应带 `Preference-Applied: wait`。
+- **计费不变：** 仍然按目标收费，只有确认发布成功的才收费；失败或未发出的不收费。
+- **重试安全：** 发布中用同一个 `Idempotency-Key` 再发同一请求，返回 `202` 和同一条帖子，不会产生第二条。
+
+### AIsa Social：URL 素材、权限与余额
+
+- **URL 素材：** `mediaItems[].url`（以及 `customMedia[].url`）接受媒体文件本身的公网 https 地址，不能上传文件的 MCP Agent 用这个方式加素材。排期或发布前，AIsa 会先读取文件开头。以下情况会拒绝：地址无响应、不在公网上、内容类型与该项的 `type` 不符（例如给的是 HTML 页面而不是视频），或文件超过 500 MB。被拒绝时返回 `422 validation_failed`，`param` 指出是哪一项。草稿不做检查。
+- **组织 MCP 连接按 Key 设置：** 通过组织连接的 MCP 客户端，现在和个人连接一样，使用其托管 Key 的 Social 权限：没有限制时可以发布；把 Key 设为 read 或 draft 即可禁止发布。原先只能读取和起草。
+- **免费平台余额为 0 也能发布：** `402 insufficient_balance` 现在只对需要付费的帖子（如 X）检查；报价为 $0 的帖子，余额为 0 也能排期和发布。
+
+---
+
 ## 2026 年 11 月 7 日
 
 ### Unified API
