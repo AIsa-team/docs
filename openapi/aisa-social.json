@@ -30,13 +30,13 @@
     },
     "x-aisa-configured-paths": [],
     "x-aisa-document": {
-      "facts_hash": "a0e81d3751b23884f678d19d4677b1469e5a74914b518f7de4c00c4f9c3c4867",
+      "facts_hash": "0f573ebb1dc23dc758a54ca8477ff2b47f45ca752e2cf321b1c867fa503302f3",
       "generator_version": "3",
       "protocol_version": "1",
       "schema_version": "1",
       "composer_version": "29",
       "response_pending": [],
-      "document_hash": "sha256:432011aa74322f49467389659fe18ac37047f02d9bbc5aed5a2ae6886f14a366"
+      "document_hash": "sha256:f1fcdcef6ed6d547a59ab5bd0e362ad944bc2739fa379c95e03cfb98ac4e0bf2"
     },
     "x-aisa-plans": {
       "builder": 1.0,
@@ -52,7 +52,7 @@
         "title": "AIsa Social",
         "description": "",
         "x-aisa-document": {
-          "facts_hash": "a0e81d3751b23884f678d19d4677b1469e5a74914b518f7de4c00c4f9c3c4867",
+          "facts_hash": "0f573ebb1dc23dc758a54ca8477ff2b47f45ca752e2cf321b1c867fa503302f3",
           "generator_version": "3",
           "protocol_version": "1",
           "schema_version": "1"
@@ -51057,9 +51057,18 @@
         "x-aisa-docs-url": "/api-reference/aisa-social/get_aisa_social_apis_v1_social_posts"
       },
       "post": {
-        "description": "Creates a draft, a scheduled post, or publishes now. Drafts stay in AIsa until scheduled or published. Returns 201, 207 when some platforms failed synchronously, or 202 with status publishing or scheduled while the outcome is pending. A replay of an idempotent request returns 200 with the original post. Each X (twitter or x) target supports a single X post, including scheduling with scheduledFor and timezone. X threads (threadItems), articles and link cards are not supported, including in drafts. Plain text URLs, replies and quotes remain supported subject to their field constraints.",
+        "description": "Creates a draft, a scheduled post, or publishes now. Drafts stay in AIsa until scheduled or published (201). With publishNow the post is saved and answered at once with 202 and status publishing; AIsa then publishes it in the background. The outcome arrives as the post.published, post.partial or post.failed webhook, or read GET /posts/{postId} until status leaves publishing (usually within seconds; video can take a minute or two). A failed post keeps its id with status failed and can be edited and published again. To wait for the platform instead, send wait=true or the header Prefer: wait: the answer is then 201 with the platform post ids, 207 when some platforms failed, 202 if the outcome is still unknown after about 100 seconds, or the error. A scheduled post returns 201, 207 when some platforms failed, or 202 while the outcome is pending. A replay of an idempotent request returns 200 with the original post (202 while it is still publishing). Each X (twitter or x) target supports a single X post, including scheduling with scheduledFor and timezone. X threads (threadItems), articles and link cards are not supported, including in drafts. Plain text URLs, replies and quotes remain supported subject to their field constraints.",
         "operationId": "post_aisa_social_apis_v1_social_posts",
         "parameters": [
+          {
+            "description": "true waits for the platform before answering (also Prefer: wait). Only changes publishNow requests; the default answers 202 publishing at once.",
+            "in": "query",
+            "name": "wait",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
           {
             "description": "Strongly recommended. Reusing a key within 24 hours returns the original result; a different body returns 409 idempotency_key_reused. Without a key the server derives one from the body in 10-minute buckets and echoes it in the response header.",
             "in": "header",
@@ -51122,6 +51131,7 @@
                           ]
                         },
                         "mediaId": {
+                          "description": "A media id from POST /media/presign after the upload finished. Set url or mediaId, not both.",
                           "pattern": "^med_[0-9A-Za-z]{22}$",
                           "type": [
                             "string",
@@ -51141,12 +51151,14 @@
                           ]
                         },
                         "type": {
+                          "description": "image, video, gif or document (PDF; LinkedIn only).",
                           "type": [
                             "string",
                             "null"
                           ]
                         },
                         "url": {
+                          "description": "Public https URL of the media file itself (not a page that shows it). Set url or mediaId, not both. AIsa fetches the start of the file before scheduling or publishing and refuses a URL that does not answer, is not on the public internet, serves another type than type (for example an HTML page), or is larger than 500 MB; the platform fetches the file when it publishes. Agents without file upload use this.",
                           "type": [
                             "string",
                             "null"
@@ -51676,6 +51688,7 @@
                                 ]
                               },
                               "mediaId": {
+                                "description": "A media id from POST /media/presign after the upload finished. Set url or mediaId, not both.",
                                 "pattern": "^med_[0-9A-Za-z]{22}$",
                                 "type": [
                                   "string",
@@ -51695,12 +51708,14 @@
                                 ]
                               },
                               "type": {
+                                "description": "image, video, gif or document (PDF; LinkedIn only).",
                                 "type": [
                                   "string",
                                   "null"
                                 ]
                               },
                               "url": {
+                                "description": "Public https URL of the media file itself (not a page that shows it). Set url or mediaId, not both. AIsa fetches the start of the file before scheduling or publishing and refuses a URL that does not answer, is not on the public internet, serves another type than type (for example an HTML page), or is larger than 500 MB; the platform fetches the file when it publishes. Agents without file upload use this.",
                                 "type": [
                                   "string",
                                   "null"
@@ -53266,7 +53281,7 @@
           "meter": "social.post.published"
         },
         "x-aisa-revision": {
-          "handler_contract_hash": "c8ee3f64682cc27186279808cc1744dfac74dd6836701dabd3c609879e14c557"
+          "handler_contract_hash": "064e95df49962803435853d3f5b87379335ccba67305939b27b0989dab784649"
         },
         "x-aisa-status": "enabled",
         "x-aisa-validation": "runtime",
@@ -54281,9 +54296,18 @@
         "x-aisa-docs-url": "/api-reference/aisa-social/get_aisa_social_apis_v1_social_posts_postid"
       },
       "put": {
-        "description": "Edits a draft, scheduled or failed post. Turning a draft into a scheduled or published post needs social:publish. Published, publishing, partial and cancelled posts return 409 post_not_editable. Each X (twitter or x) target supports a single X post, including scheduling with scheduledFor and timezone. X threads (threadItems), articles and link cards are not supported, including in drafts. Plain text URLs, replies and quotes remain supported subject to their field constraints.",
+        "description": "Edits a draft, scheduled or failed post. Turning a draft into a scheduled or published post needs social:publish; publishing a draft or a failed post now works like POST /posts with publishNow (202 publishing unless wait=true). Published, publishing, partial and cancelled posts return 409 post_not_editable. Each X (twitter or x) target supports a single X post, including scheduling with scheduledFor and timezone. X threads (threadItems), articles and link cards are not supported, including in drafts. Plain text URLs, replies and quotes remain supported subject to their field constraints.",
         "operationId": "put_aisa_social_apis_v1_social_posts_postid",
         "parameters": [
+          {
+            "description": "true waits for the platform before answering (also Prefer: wait). Only changes publishNow requests; the default answers 202 publishing at once.",
+            "in": "query",
+            "name": "wait",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
           {
             "in": "path",
             "name": "postId",
@@ -54327,6 +54351,7 @@
                           ]
                         },
                         "mediaId": {
+                          "description": "A media id from POST /media/presign after the upload finished. Set url or mediaId, not both.",
                           "pattern": "^med_[0-9A-Za-z]{22}$",
                           "type": [
                             "string",
@@ -54346,12 +54371,14 @@
                           ]
                         },
                         "type": {
+                          "description": "image, video, gif or document (PDF; LinkedIn only).",
                           "type": [
                             "string",
                             "null"
                           ]
                         },
                         "url": {
+                          "description": "Public https URL of the media file itself (not a page that shows it). Set url or mediaId, not both. AIsa fetches the start of the file before scheduling or publishing and refuses a URL that does not answer, is not on the public internet, serves another type than type (for example an HTML page), or is larger than 500 MB; the platform fetches the file when it publishes. Agents without file upload use this.",
                           "type": [
                             "string",
                             "null"
@@ -54881,6 +54908,7 @@
                                 ]
                               },
                               "mediaId": {
+                                "description": "A media id from POST /media/presign after the upload finished. Set url or mediaId, not both.",
                                 "pattern": "^med_[0-9A-Za-z]{22}$",
                                 "type": [
                                   "string",
@@ -54900,12 +54928,14 @@
                                 ]
                               },
                               "type": {
+                                "description": "image, video, gif or document (PDF; LinkedIn only).",
                                 "type": [
                                   "string",
                                   "null"
                                 ]
                               },
                               "url": {
+                                "description": "Public https URL of the media file itself (not a page that shows it). Set url or mediaId, not both. AIsa fetches the start of the file before scheduling or publishing and refuses a URL that does not answer, is not on the public internet, serves another type than type (for example an HTML page), or is larger than 500 MB; the platform fetches the file when it publishes. Agents without file upload use this.",
                                 "type": [
                                   "string",
                                   "null"
@@ -56121,7 +56151,7 @@
           "meter": "social.post.published"
         },
         "x-aisa-revision": {
-          "handler_contract_hash": "b226c46355428e5d04befaa71264e97e27d7a6fc8a4da3bc41c3926356e121a0"
+          "handler_contract_hash": "4fdbbc67bb850abba5c2805a7d1fbd0ba155c30972dbf96aac411c505bbb7e14"
         },
         "x-aisa-status": "enabled",
         "x-aisa-validation": "runtime",
@@ -62727,6 +62757,7 @@
                           ]
                         },
                         "mediaId": {
+                          "description": "A media id from POST /media/presign after the upload finished. Set url or mediaId, not both.",
                           "pattern": "^med_[0-9A-Za-z]{22}$",
                           "type": [
                             "string",
@@ -62746,12 +62777,14 @@
                           ]
                         },
                         "type": {
+                          "description": "image, video, gif or document (PDF; LinkedIn only).",
                           "type": [
                             "string",
                             "null"
                           ]
                         },
                         "url": {
+                          "description": "Public https URL of the media file itself (not a page that shows it). Set url or mediaId, not both. AIsa fetches the start of the file before scheduling or publishing and refuses a URL that does not answer, is not on the public internet, serves another type than type (for example an HTML page), or is larger than 500 MB; the platform fetches the file when it publishes. Agents without file upload use this.",
                           "type": [
                             "string",
                             "null"
@@ -63281,6 +63314,7 @@
                                 ]
                               },
                               "mediaId": {
+                                "description": "A media id from POST /media/presign after the upload finished. Set url or mediaId, not both.",
                                 "pattern": "^med_[0-9A-Za-z]{22}$",
                                 "type": [
                                   "string",
@@ -63300,12 +63334,14 @@
                                 ]
                               },
                               "type": {
+                                "description": "image, video, gif or document (PDF; LinkedIn only).",
                                 "type": [
                                   "string",
                                   "null"
                                 ]
                               },
                               "url": {
+                                "description": "Public https URL of the media file itself (not a page that shows it). Set url or mediaId, not both. AIsa fetches the start of the file before scheduling or publishing and refuses a URL that does not answer, is not on the public internet, serves another type than type (for example an HTML page), or is larger than 500 MB; the platform fetches the file when it publishes. Agents without file upload use this.",
                                 "type": [
                                   "string",
                                   "null"
@@ -63579,7 +63615,7 @@
           "kind": "no_customer_charge"
         },
         "x-aisa-revision": {
-          "handler_contract_hash": "943bdb0e679b5463dabcd03ac6b7176eec323cfd03cfb22bd3e965b66a10f1b1"
+          "handler_contract_hash": "51bf64215f0aab3d4ff0a2fd518558850b4d71f5c421125e1a2603bd5e742ecf"
         },
         "x-aisa-status": "enabled",
         "x-aisa-validation": "runtime",
