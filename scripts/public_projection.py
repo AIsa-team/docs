@@ -46,6 +46,8 @@ import re
 from pathlib import Path
 import sys
 
+from mintlify_response_schema import normalize_response_refs
+
 ROOT = Path(__file__).resolve().parents[1]
 CATALOGS = ROOT / 'scripts/public_projection.json'
 PUBLIC_DIR = 'openapi-public'
@@ -196,6 +198,7 @@ def project(document, language="en"):
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict) and 'aisa-pricing:start' in operation.get('description', ''):
                 remove_price_summary(operation)
             if method in {'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'} and isinstance(operation, dict):
+                normalize_response_refs(operation)
                 drop_internal_notes(operation)
                 if 'x-aisa-example' in operation or method.upper() + ' ' + route in evidence_scope():
                     mark_example_verification(operation, language)
