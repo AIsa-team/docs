@@ -269,7 +269,7 @@ def update_disabled_indexing(text, disabled):
     return '---\n' + header + '\n---\n' + prose
 
 
-def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False, page_identity_cache=None) -> None:
+def generate_pages(root: Path, provider: str, document: dict, changes: dict, previous: dict | None = None, decorate_links: bool = True, page_references=None, require_existing_links: bool = False, page_identity_cache=None, published_pages=None) -> None:
     """Refresh stable pages and expose only available operations in navigation."""
     docs_path = root / "docs.json"
     if not docs_path.exists():
@@ -310,6 +310,10 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
         if identity:
             known_ids.setdefault(identity, set()).add(page)
     selected_pages = select_pages(provider, document, known_ids, known)
+    if published_pages is not None:
+        for identity, primary in published_pages.items():
+            aliases = [p for p in selected_pages[identity] if (root / (p + '.mdx')).is_file()]
+            selected_pages[identity] = sorted(set(aliases) | {primary})
     if require_existing_links:
         from contract_page_links import DOCS_PREFIX
         for _, _, operation in operations(document):
@@ -346,7 +350,8 @@ def generate_pages(root: Path, provider: str, document: dict, changes: dict, pre
                     frontmatter, prose = localization.split_frontmatter(text)
                     frontmatter = localization.replace_frontmatter_value(frontmatter, "title", localized_title)
                     text = "---\n" + frontmatter + "\n---\n" + prose
-                    text = re.sub(r"^openapi:.*$", lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
+                    binding = r"^(?:x-aisa-archived-)?openapi:.*$" if published_pages is not None else r"^openapi:.*$"
+                    text = re.sub(binding, lambda _: f"openapi: {reference}", text, count=1, flags=re.M)
                     if "x-aisa-operation-id:" not in text:
                         text = text.replace("---\n", "---\n" + identity + "\n", 1)
                     else:

@@ -19,6 +19,9 @@ import time
 
 import yaml
 
+from dev_release_pages import (ARCHIVE_NOTE, DEV_API as DEV_ORIGIN, DISABLED_NOTES,
+                               HISTORIC_NOTES, PRODUCTION_NOTES, project as project_release)
+from runtime_contract_artifact import AGGREGATE, NATIVE
 from fetch_runtime_release import PublicReader, decode, require, sha, category_content
 from fetch_runtime_release import acquire as acquire_release, validate_current, ACQUISITION_SECONDS
 from pull_openapi import stage, update_disabled_indexing
@@ -32,42 +35,40 @@ from runtime_consolidate_openapi import (build_unified_spec, publication_yaml,
                                         inject_x402_annotations, remove_v2_path_mirrors)
 
 
-DEV_ORIGIN = 'https://dev-api.aisa.one'
 PROD_ORIGIN = 'https://api.aisa.one'
 ROOT = Path(__file__).resolve().parents[1]
 KEY = re.compile(r'[a-z0-9][a-z0-9_.-]*')
-ARCHIVE_NOTE = '<Warning>This endpoint is unavailable in the current dev Runtime contract snapshot.</Warning>\n\n'
-HISTORIC_NOTES = {
-    'en': '<Warning>This existing API reference is preserved. This endpoint has not been verified in the current dev Runtime contract snapshot.</Warning>\n\n',
-    'zh': '<Warning>此页面保留原有接口文档。该接口尚未在当前 dev Runtime 合同中验证。</Warning>\n\n',
-}
-PRODUCTION_NOTES = {
-    'en': '<Warning>This reference has not been verified against the current production API contract.</Warning>\n\n',
-    'zh': '<Warning>此文档尚未通过当前生产接口契约的核验。</Warning>\n\n',
-}
-DISABLED_NOTES = {
-    'en': '<Warning>This endpoint is disabled. Its historical documentation is retained for reference.</Warning>\n\n',
-    'zh': '<Warning>此接口已停用，保留历史文档仅供参考。</Warning>\n\n',
-}
+
 
 
 def source_origin(source):
-    require(source in {'dev', 'production'}, 'Unsupported Runtime source')
+    require(source in {'dev', 'production', 'dev-release'}, 'Unsupported Runtime source')
     return PROD_ORIGIN if source == 'production' else DEV_ORIGIN
 
 
-def acquire_production(reader):
-    """Reuse the production release reader; do not fall back to mixed live facts."""
+def acquire_published(reader):
     current = decode(reader('/public/api-contract/current')[0])
     revision, compiler = current.get('artifact_revision'), current.get('compiler_revision')
     validate_current(current, revision, compiler)
     contents, category, _, _, receipt = acquire_release(revision, compiler, reader)
-    files = {'index.json': contents['index.json'], 'category.json': category}
-    files.update({Path(name).name: raw for name, raw in contents.items() if name.startswith('providers/')})
     provenance = {key: receipt[key] for key in (
         'artifact_revision', 'compiler_revision', 'source_digest', 'generation',
         'fresh_before_and_after', 'provider_count')}
+    return contents, category, provenance
+
+
+def acquire_production(reader):
+    contents, category, provenance = acquire_published(reader)
+    files = {'index.json': contents['index.json'], 'category.json': category}
+    files.update({Path(name).name: raw for name, raw in contents.items() if name.startswith('providers/')})
     return files, provenance
+
+
+def acquire_dev_release(reader):
+    contents, _, provenance = acquire_published(reader)
+    require(AGGREGATE in contents, 'Dev release lacks published canonical contracts')
+    return {name: raw for name, raw in contents.items()
+            if name == AGGREGATE or NATIVE.fullmatch(name)}, provenance
 
 
 def prune_navigation(node, hidden):
@@ -364,8 +365,13 @@ def sync(root, *, write=False, if_changed=False, reader=None, source='dev'):
     require(branch == 'dev', 'Dev Runtime sync requires the dev branch')
     origin = source_origin(source)
     reader = reader or PublicReader(origin, time.monotonic() + ACQUISITION_SECONDS)
-    files, source_release = acquire_production(reader) if source == 'production' else (acquire(reader), None)
-    print('Acquired verified ' + source + ' Runtime facts: ' + str(len(files) - 2) + ' providers', flush=True)
+    if source == 'dev-release':
+        files, source_release = acquire_dev_release(reader)
+    elif source == 'production':
+        files, source_release = acquire_production(reader)
+    else:
+        files, source_release = acquire(reader), None
+    print('Acquired verified ' + source + ' Runtime input files: ' + str(len(files)), flush=True)
     previous_path = root / 'docs/dev-runtime.json'
     if if_changed and previous_path.exists():
         previous = json.loads(previous_path.read_text())
@@ -377,12 +383,22 @@ def sync(root, *, write=False, if_changed=False, reader=None, source='dev'):
             return {**previous, 'generation_status': previous['status'], 'status': 'unchanged',
                     'observed_at': datetime.now(timezone.utc).isoformat(),
                     'written': False, 'changed_files': []}
-    # Private diagnostic inputs. The CLI never reuses these as fresh evidence.
-    cache = root / '.cache/dev-runtime-inputs'
-    cache.mkdir(parents=True, exist_ok=True)
-    for name, raw in files.items():
-        (cache / name).write_bytes(raw)
-    outputs, report = generate(root, files, source=source, source_release=source_release)
+    if source == 'dev-release':
+        outputs = project_release(root, files, source_release)
+        report = {'schema_version': 1, 'environment': 'dev', 'source_environment': 'dev',
+                  'runtime_origin': origin, 'source_release': source_release,
+                  'kind': 'dev_immutable_release', 'status': 'generated', 'formal_publication': False,
+                  'inputs_sha256': inputs_sha256(files), 'snapshot_sha256': snapshot_hashes(files),
+                  'presentation_sha256': {name: sha(raw) for name, raw in outputs.items()
+                                          if name.startswith('openapi/') or name == 'openapi.yaml'}}
+        outputs['docs/dev-runtime.json'] = (json.dumps(report, sort_keys=True, indent=2) + '\n').encode()
+    else:
+        # Private diagnostic inputs. The CLI never reuses these as fresh evidence.
+        cache = root / '.cache/dev-runtime-inputs'
+        cache.mkdir(parents=True, exist_ok=True)
+        for name, raw in files.items():
+            (cache / name).write_bytes(raw)
+        outputs, report = generate(root, files, source=source, source_release=source_release)
     changed = {name: raw for name, raw in outputs.items()
                if not (root / name).exists() or (root / name).read_bytes() != raw}
     # Reuse presentation validation against a complete private candidate before
@@ -410,7 +426,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--write', action='store_true')
-    parser.add_argument('--source', choices=('dev', 'production'), default='dev',
+    parser.add_argument('--source', choices=('dev-release', 'dev', 'production'), default='dev-release',
                         help='API contract source; output and publication always remain on dev')
     parser.add_argument('--if-changed', action='store_true',
                         help='Skip generation when verified dev Runtime inputs are unchanged')

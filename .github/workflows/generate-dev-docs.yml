@@ -43,20 +43,17 @@ jobs:
           python-version: '3.12'
       - name: Install generation dependencies
         run: pip install 'PyYAML==6.0.3' 'jsonschema>=4.23,<5' 'openapi-spec-validator>=0.7,<0.8'
-      - name: Preview the verified production Runtime release on dev
+      - name: Generate Raw API pages from the published dev Runtime contracts
         env:
           FORCE_GENERATION: ${{ github.event_name == 'push' || inputs.force == true }}
         run: |
           options=()
           if [ "$FORCE_GENERATION" != true ]; then options+=(--if-changed); fi
-          python scripts/sync_dev_runtime.py --source production --write "${options[@]}" \
+          python scripts/sync_dev_runtime.py --source dev-release --write "${options[@]}" \
             --report "$RUNNER_TEMP/dev-runtime-report.json"
           git diff --check
       - name: Generate the Task pages from the dev worker release
-        # Keep this explicitly mixed-environment preview: Raw APIs use the
-        # production release above, Tasks the dev immutable worker release.
-        # docs/dev-runtime.json and docs/task-runtime.json record both pins.
-        # Missing, stale or invalid Task artifacts fail; no live GET fallback.
+        # Tasks retain their independent immutable dev release acquisition.
         run: |
           python scripts/sync_tasks.py --api https://dev-api.aisa.one
           git diff --check

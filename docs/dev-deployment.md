@@ -69,76 +69,32 @@ production receipts, push to `main`, or notify production consumers. Scheduled
 workflows continue to run from the repository's default branch (`main`). Do not
 change the default branch to dev.
 
-## Production contract preview on dev
+## Published dev Raw API contracts
 
-The documentation deployment and API contract source are separate. The dev
-workflow currently runs `sync_dev_runtime.py --source production`: it reads
-public production metadata and publishes the generated preview only to `dev`.
-The normal timer uses the same source, so a later refresh cannot replace the
-preview with the smaller dev catalog.
+The dev workflow runs `sync_dev_runtime.py --source dev-release`. The existing
+release reader verifies the dev current pointer before and after fetching the
+immutable manifest members, their SHA-256 and ETags, and the complete canonical
+graph. Category content is checked for stability by the reader. Raw API pages
+use `contracts/native/*.json`; the aggregate comes from `contracts/openapi.json`.
+An unavailable, stale or facts-only dev release fails generation.
 
-This is an explicit preview configuration. It does not enable production
-publication on dev, change the default branch, approve source evidence, or
-notify consumers. All source acquisition is read-only; no business API or
-upstream provider calls are made.
+English and Chinese reference pages bind the published method and path. The
+site projects first-party OpenAPI servers onto the dev API and primary reference
+links onto the dev Docs site. Historical pages without an available operation
+keep their prose and lose their interactive binding. Source release pins and
+input hashes are recorded in `docs/dev-runtime.json` alongside the hashes of
+the generated contracts. For unchanged inputs the CLI still performs a fresh
+verified acquisition before skipping generation.
 
-Dev navigation checks use `regroup_api_reference.py --check --preserve-navigation`
-to match the generator's retained directory hierarchy. The check still requires
-unique English and Chinese page sets to mirror each other, and verifies the
-platform index and Data APIs cards against that navigation. Page, slug and link
-checks also run. Production retains the default regrouping and translation checks.
-
-
-The production source uses the existing `fetch_runtime_release` reader:
-
-1. Discover the fresh published release at `https://api.aisa.one/public/api-contract/current`.
-2. Download its immutable manifest members and verify hashes, ETags, complete
-   provider coverage, canonical graph consistency, byte bounds and freshness.
-3. Require the current release and category content to remain stable across
-   acquisition. A missing, changed or invalid release aborts the run; there is
-   no fallback to old files or a mixture of live provider responses.
-4. Recompose the verified raw provider facts with the dev generator and reviewed
-   source configuration. The preview uses new presentation code; it does not
-   claim to be a production canonical publication.
-
-`docs/dev-runtime.json` records the production origin, release revision,
-compiler, generation and input hashes, alongside `environment: dev` and
-`formal_publication: false`. The fixed reader from main is reused with its
-bounded parallel acquisition and complete-release size limits.
-
-API URLs remain production URLs because those are the contracts being
-previewed. They must not be rewritten to dev endpoints which may not exist.
-Schema/download links point to the dev branch's generated files. This preview
-requires a production API key for an actual request; generation and validation
-never make such requests.
-
-The private generation candidate normalizes existing native document URLs to
-the selected source before composing and hashing retained operations. Repeating
-generation with the same inputs after a source switch therefore preserves both
-page content and document hashes. The source checkout and acquired facts remain
-unchanged until the validated output is explicitly written.
-
-Existing reference links are retained. Explicitly disabled operations are
-identified as historical; unsupported old pricing labels such as `cost_tier`
-and `model` do not turn an unpriced disabled endpoint into an unknown active
-billing rule. Other unverified references remain marked as unverified; changing
-the input source does not waive identity, schema or source-review checks.
-
-For a local dry run on the dev branch:
+On a local dev checkout, omit `--write` to dry-run the same path:
 
 ```sh
-python scripts/sync_dev_runtime.py --source production --report /tmp/dev-runtime-report.json
+python scripts/sync_dev_runtime.py --source dev-release --report /tmp/dev-runtime-report.json
 ```
-
-Add `--write` to apply validated outputs. The command rejects every branch
-except dev before acquisition or writes. `--source dev` remains available for
-explicit dev API checks; its complete live-facts reader retains double reads,
-provider hashes, a stable catalog and no redirects.
 
 ## Task pages on dev
 
-Task pages preview the dev API independently of the production Raw API preview
-above. `scripts/sync_tasks.py` reads the dev worker's immutable
+Task pages preview the dev API using their own release acquisition. `scripts/sync_tasks.py` reads the dev worker's immutable
 `tasks/catalog.json` through `https://dev-api.aisa.one/public/api-contract/current`.
 It verifies the release manifest, file hashes and freshness, then writes:
 
@@ -147,9 +103,7 @@ It verifies the release manifest, file hashes and freshness, then writes:
   the dev API as server;
 - a `Tasks` / `任务` group in the API Reference tab, after `Overview`.
 
-The pages live outside `api-reference/` and `openapi/`, so the Runtime
-generator neither rewrites their URLs to production nor marks them as
-unverified production references. `generate-dev-docs.yml` runs the script
+The Task generator owns the pages outside `api-reference/` and `openapi/`. `generate-dev-docs.yml` runs the script
 after the Runtime step on every run, and each run rewrites all Task files, so
 a disabled or removed task disappears after the next successful worker publication
 and documentation generation. Missing, stale or invalid artifacts preserve the
