@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 from contract_page_links import operations, page_reference
 from fetch_runtime_release import decode, sha
+from mintlify_response_schema import normalize_response_refs
 from pull_openapi import (existing_page_references, generate_pages, refresh_legacy_page_blocks,
                           refresh_localized_documents)
 from readable_contract_notes import strip_generated_block
@@ -37,6 +38,8 @@ def project_openapi(raw):
     document = decode(raw)
     changed = False
     for _, _, op in operations(document):
+        if normalize_response_refs(op):
+            changed = True
         link = op.get('x-aisa-docs-url', '')
         if link.startswith('https://aisa.one/docs/api-reference/'):
             op['x-aisa-docs-url'] = DEV_SITE + link.removeprefix('https://aisa.one/docs')
